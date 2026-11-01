@@ -75,6 +75,7 @@ check-harness:
 
 check-install:
 	sh ./tests/install.sh
+	sh ./tests/report.sh
 
 check-build:
 	KDIR="$(KDIR)" sh ./check-install.sh --build-only

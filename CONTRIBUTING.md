@@ -2,57 +2,74 @@
 
 # Contributing
 
-Licensing: `pwmstream.c` is `Apache-2.0 OR GPL-2.0-only`; everything else is
-Apache-2.0. Keep SPDX headers on new files and do not copy GPL-only code into
-Apache-2.0-only files.
+Contributions are welcome, and getting started is easy: all you need is a computer. Most changes
+(docs, the CLI, scripts, packaging, tests) can be built and checked without a Pi, and the checks
+take a few minutes. You only need a Pi 3B+ (and ideally a scope) to test the driver itself.
 
-## Checks (no hardware needed)
+Good ways to help:
 
-In the devcontainer (Debian 13 aarch64, pinned kernel headers):
+- Try it on a new kernel and report what you see
+  ([Supporting a newer kernel](#supporting-a-newer-kernel)).
+- Improve the docs, tests or tooling.
+- Fix a bug or add a feature. For anything big, open an issue first so we can agree the approach.
 
-```sh
-make check-all   # everything below, no hardware; `make help` lists the targets
-```
+## Overview
 
-That runs `check check-install check-harness check-preflight check-overlay check-kbuild check-static check-package`
-(ABI/CLI, install scripts, deploy harness, preflight, overlay, a kernel build against the pinned headers,
-sparse/shellcheck/cppcheck, and the `.deb` with lintian and a scratch DKMS build).
+| Path                                                                     | What it is                                                                                                                                                |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pwmstream.c`, `pwmstream.h`, `pwmstream-cli.c`, `pwmstream-overlay.dts` | The kernel module, its ABI header, the CLI and the device-tree overlay                                                                                    |
+| `packaging/`, `VERSION`                                                  | The DKMS `.deb`                                                                                                                                           |
+| `check-install.sh`, `install-state.sh`, `uninstall.sh`, `Makefile`       | Manual install, preflight and diagnostics (`pwmstream-report`)                                                                                            |
+| `dev-tools/`, `tests/`, `.devcontainer/`                                 | Development only: Pi deploy and test scripts, test suites, dev environment                                                                                |
+| `docs/`                                                                  | [User guide](docs/usage.md), [ABI reference](docs/abi.md), [development guide](docs/development.md), [design notes and hardware research](docs/design.md) |
 
-CI (`.github/workflows/ci.yml`) runs `make check-all` on an arm64 runner in a `debian:13` container; pushing a tag `vX.Y.Z` matching `VERSION` publishes the `.deb` as a release. This repository is the driver only; the frontend lives in its own repository and depends on the versioned ABI in `pwmstream.h`.
+This repository is the driver only. A separate frontend repository will build on the versioned ABI
+in `pwmstream.h`. `make help` lists the build and check targets.
 
-Hardware checks never run in CI. Use `dev-tools/deploy.sh` and `dev-tools/test.sh` against a Pi you own, and read [docs/development.md](docs/development.md) first.
+## Getting started
 
-## Hardware safety
+1. Fork and clone the repository.
+2. Set up a build environment. Either:
+   - **Devcontainer (easiest):** open the repository in an IDE that supports devcontainers and
+     reopen it in the container. See [.devcontainer/README.md](.devcontainer/README.md).
+   - **Without it:** on any Debian 13 arm64 machine, install the build tools and kernel headers as
+     described in [docs/development.md](docs/development.md#hardware-free-checks), which also covers
+     other machines.
+3. Make your change on a branch.
+4. Run the checks. They need no hardware:
 
-This driver drives GPIO18 directly and owns PWM0 and its DMA channel. Never install or
-test with an electrically unsafe load attached, never stop other PWM/DMA users by
-guessing, and do not relax the kernel-release or ownership guards without a reviewed
-justification. Pi-side install, uninstall and waveform tests are explicit and manual;
-installation never edits boot settings silently. Do not describe smoke tests as full
-qualification.
+   ```sh
+   make check-all
+   ```
 
-Report bugs using the issue template (kernel, board, `pwmstream-report` or `install-state.sh` output, logs).
+5. Open a pull request. CI runs the same `make check-all` on an arm64 runner, so it should pass
+   there if it passes for you.
 
-## Repository layout
+If your change affects the driver's behaviour, say how you tested it, and on which kernel and Pi.
+Pi-side tests are manual: see [Testing on a Pi](docs/development.md#testing-on-a-pi).
 
-| Path | What it is |
-| --- | --- |
-| `pwmstream.c`, `pwmstream.h`, `pwmstream-cli.c`, `pwmstream-overlay.dts` | Production: the kernel module, its ABI header, the CLI and the device-tree overlay |
-| `packaging/`, `VERSION` | Production: the DKMS `.deb` |
-| `check-install.sh`, `install-state.sh`, `uninstall.sh`, `Makefile` | Production: manual install, preflight and diagnostics |
-| `dev-tools/`, `tests/`, `.devcontainer/` | Development only: Pi deploy and test scripts, test suites, dev environment |
-| `docs/` | [User guide](docs/usage.md), [ABI reference](docs/abi.md), [development guide](docs/development.md), [design notes and hardware research](docs/design.md) |
+## Ground rules
 
-`make help` lists the build and check targets; `make deb` builds `dist/pwmstream_<version>_arm64.deb`.
+- **Hardware safety.** The driver drives GPIO18 directly and owns PWM0 and its DMA channel. Never
+  test with an electrically unsafe load attached, never stop other PWM/DMA users by guessing, and
+  don't relax the kernel-release or ownership guards without a reviewed justification. Installation
+  never edits boot settings silently. Don't describe smoke tests as full qualification.
+- **Licensing.** `pwmstream.c` is `Apache-2.0 OR GPL-2.0-only`; everything else is Apache-2.0. Keep
+  SPDX headers on new files and don't copy GPL-only code into Apache-2.0-only files.
+
+## Reporting bugs
+
+Use the [issue template](../../issues/new?template=bug_report.md). Include your kernel, board, the
+`pwmstream-report` output and logs. Please try the latest release first.
 
 ## Supporting a newer kernel
 
-The supported range is deliberately narrow. If a Pi OS update brings a kernel outside it, open an issue
-with the `uname -r` output, or send a pull request following the steps in
-[docs/development.md](docs/development.md#extending-the-supported-kernel-range). Hardware results from
-a Pi running that kernel are the most valuable evidence.
+If a Pi OS update brings a kernel outside it, open an
+issue with your `uname -r` output, or better still send a pull request following the steps in
+[docs/development.md](docs/development.md#extending-the-supported-kernel-range). Hardware results
+from a Pi running that kernel are the most valuable evidence.
 
 ## Releases
 
-Push a tag `vX.Y.Z` equal to `VERSION`; CI builds and publishes the `.deb`. A separate frontend
-repository will build on the versioned ABI in `pwmstream.h`.
+Maintainers publish a release by pushing a tag `vX.Y.Z` equal to `VERSION`; CI builds and publishes
+the `.deb`.

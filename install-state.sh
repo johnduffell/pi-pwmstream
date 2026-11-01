@@ -6,8 +6,57 @@
 # Override BOOT_DIR to inspect a non-default firmware directory.
 set -u
 PATH="$PATH:/usr/sbin:/sbin"
+release_url=${PWMSTREAM_RELEASE_URL:-https://api.github.com/repos/johnduffell/pi-pwmstream/releases/latest}
+force=0
+case "${1:-}" in
+	"") ;;
+	--force) force=1 ;;
+	*)
+		echo "Usage: pwmstream-report [--force]" >&2
+		echo "Checks GitHub for a newer release first (the only network access) and stops if" >&2
+		echo "yours is out of date. --force prints the report anyway, with a warning." >&2
+		exit 2
+		;;
+esac
+[ "$#" -le 1 ] || exit 2
 release=$(uname -r)
 hash_of() { sha256sum "$1" 2>/dev/null | cut -d ' ' -f 1; }
+
+# Sets update_status; returns 1 only when a newer release is confirmed.
+check_update() {
+	installed=$(dpkg-query -W -f '${Version}' pwmstream 2>/dev/null) || {
+		update_status="skipped (package not installed)"
+		return 0
+	}
+	if ! command -v curl >/dev/null 2>&1; then
+		update_status="unavailable (curl not installed)"
+		return 0
+	fi
+	reply=$(curl -fsS --max-time 5 -H 'Accept: application/vnd.github+json' "$release_url" 2>/dev/null) || {
+		update_status="unavailable (could not reach GitHub)"
+		return 0
+	}
+	latest=$(printf '%s' "$reply" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v\{0,1\}\([0-9][0-9A-Za-z.+~-]*\)".*/\1/p' | head -n 1)
+	if [ -z "$latest" ]; then
+		update_status="unavailable (no release found)"
+		return 0
+	fi
+	if dpkg --compare-versions "$latest" gt "$installed"; then
+		update_status="OUTDATED (installed $installed, latest $latest)"
+		return 1
+	fi
+	update_status="up to date ($installed)"
+}
+
+if ! check_update; then
+	if [ "$force" -eq 0 ]; then
+		echo "pwmstream $installed is out of date: the latest release is $latest." >&2
+		echo "Update first (https://github.com/johnduffell/pi-pwmstream/releases), as the problem" >&2
+		echo "may already be fixed. To print the report anyway, run: pwmstream-report --force" >&2
+		exit 1
+	fi
+	echo "WARNING: pwmstream $installed is out of date (latest $latest); report forced." >&2
+fi
 
 echo "== kernel =="
 echo "release: $release"
@@ -18,6 +67,7 @@ fi
 
 echo "== package =="
 echo "pwmstream package: $(dpkg-query -W -f '${Version}' pwmstream 2>/dev/null || echo 'not installed')"
+echo "update check: $update_status"
 if command -v dkms >/dev/null 2>&1; then
 	dkms status 2>/dev/null | grep pwmstream || echo "dkms: no pwmstream entries"
 else
