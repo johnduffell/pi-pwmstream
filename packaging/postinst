@@ -1,0 +1,26 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# Warns about a manually installed module that would conflict with the DKMS one.
+set -e
+case "$1" in
+configure)
+	for old in /lib/modules/*/updates/pwmstream.ko*; do
+		[ -e "$old" ] || continue
+		echo "pwmstream: WARNING: manually installed module $old will conflict with the DKMS module; run 'sudo make uninstall' from the source tree it came from." >&2
+	done
+	if [ -x /usr/lib/dkms/common.postinst ]; then
+		/usr/lib/dkms/common.postinst pwmstream @VERSION@ /usr/share/pwmstream "" "$2"
+	else
+		echo "pwmstream: dkms is not installed; the module was not built." >&2
+	fi
+	if ! modinfo -n pwmstream >/dev/null 2>&1; then
+		echo "pwmstream: no module for the running kernel $(uname -r) (needs 6.18.N+rpt-rpi-v8, N>=50, with headers); see 'dkms status'." >&2
+	fi
+	if command -v udevadm >/dev/null 2>&1; then
+		udevadm control --reload-rules >/dev/null 2>&1 || true
+		udevadm trigger --subsystem-match=misc --sysname-match=pwmstream0 >/dev/null 2>&1 || true
+	fi
+	echo "pwmstream: installed. Nothing is enabled yet: review the README, then run 'sudo pwmstream-enable' and reboot." >&2
+	;;
+esac
+exit 0

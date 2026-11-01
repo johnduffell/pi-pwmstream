@@ -1,0 +1,85 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# pwmstream-enable: the one step that turns the driver on. Adds dtoverlay=pwmstream to config.txt
+# and installs the overlay (installed as /usr/sbin/pwmstream-enable).
+# When to use: once after installing the package, then reboot; --dry-run previews and --disable
+# reverses it. Never reboots, loads the module or touches hardware: it edits config.txt only after
+# the read-only ownership preflight passes, and keeps a timestamped backup.
+set -eu
+libdir=${PWMSTREAM_LIBDIR:-/usr/lib/pwmstream}
+sharedir=${PWMSTREAM_SHAREDIR:-/usr/share/pwmstream}
+modinfo_cmd=${PWMSTREAM_MODINFO:-modinfo}
+
+usage() {
+	echo "Usage: pwmstream-enable [--dry-run] [--disable]" >&2
+	echo "  (default) run the ownership preflight, install the overlay and add dtoverlay=pwmstream" >&2
+	echo "  --disable comment out dtoverlay=pwmstream (reboot afterwards)" >&2
+	exit 2
+}
+dry=0
+disable=0
+for arg in "$@"; do
+	case "$arg" in
+		--dry-run) dry=1 ;;
+		--disable) disable=1 ;;
+		*) usage ;;
+	esac
+done
+
+boot=${PWMSTREAM_BOOT_DIR:-}
+if [ -z "$boot" ]; then
+	if [ -d /boot/firmware ]; then boot=/boot/firmware; else boot=/boot; fi
+fi
+config=$boot/config.txt
+overlays=$boot/overlays
+[ -f "$config" ] || { echo "No $config; set PWMSTREAM_BOOT_DIR to the firmware directory." >&2; exit 1; }
+
+active() { grep -Eq "^[[:space:]]*dtoverlay=pwmstream([[:space:],]|\$)" "$config"; }
+do_or_say() {
+	if [ "$dry" -eq 1 ]; then echo "[dry-run] $*"; else "$@"; fi
+}
+backup() {
+	stamp=$(date -u +%Y%m%dT%H%M%SZ)
+	do_or_say cp -p "$config" "$config.pwmstream-$stamp.bak"
+	echo "Backup: $config.pwmstream-$stamp.bak"
+}
+[ "$dry" -eq 1 ] || [ -w "$config" ] || { echo "Cannot write $config (run with sudo)." >&2; exit 1; }
+
+if [ "$disable" -eq 1 ]; then
+	active || { echo "dtoverlay=pwmstream is not active in $config; nothing to do."; exit 0; }
+	backup
+	if [ "$dry" -eq 0 ]; then
+		tmp=$(mktemp)
+		trap 'rm -f "$tmp"' EXIT
+		sed -E 's/^([[:space:]]*)dtoverlay=pwmstream(([[:space:],].*)?)$/#\1dtoverlay=pwmstream\2 # disabled by pwmstream-enable/' "$config" > "$tmp"
+		cat "$tmp" > "$config"
+	fi
+	echo "Disabled. Reboot to release PWM0/GPIO18; included files and model sections are not edited."
+	exit 0
+fi
+
+if ! "$modinfo_cmd" -n pwmstream >/dev/null 2>&1; then
+	echo "No pwmstream module for kernel $(uname -r). Check: dkms status; the kernel must be 6.18.N+rpt-rpi-v8 (N>=50) with headers installed." >&2
+	exit 1
+fi
+"$libdir/preflight" --no-headers
+bad=$(grep -En '^[[:space:]]*(dtparam=audio=(on|1)\b|dtoverlay=(pwm|pwm-2chan|audremap|i2s-[a-z-]+)(,|[[:space:]]|$))' "$config" || true)
+if [ -n "$bad" ]; then
+	echo "These lines in $config conflict with PWM0/GPIO18; disable them first:" >&2
+	echo "$bad" >&2
+	exit 1
+fi
+[ -d "$overlays" ] || { echo "No $overlays directory." >&2; exit 1; }
+do_or_say install -m 0644 "$sharedir/pwmstream.dtbo" "$overlays/pwmstream.dtbo"
+if active; then
+	echo "dtoverlay=pwmstream is already active in $config."
+else
+	backup
+	if [ "$dry" -eq 0 ]; then
+		printf '\n# Added by pwmstream-enable; undo with: pwmstream-enable --disable\n[all]\ndtoverlay=pwmstream\n' >> "$config"
+	else
+		echo "[dry-run] append [all] and dtoverlay=pwmstream to $config"
+	fi
+fi
+echo "Review included files and model sections in $config yourself, then reboot."
+echo "Do not enable with an electrically unsafe load attached. Output stays stopped until you run pwmstream-cli."

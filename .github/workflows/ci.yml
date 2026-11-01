@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: Apache-2.0
+# Runs `make check-all` on every push to main and pull request. A tag vX.Y.Z equal to VERSION also
+# publishes the .deb as a GitHub release.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    # Native arm64 (free for public repos) in the same Debian 13 userland as
+    # Raspberry Pi OS, so the compiler matches the pinned kernel headers.
+    runs-on: ubuntu-24.04-arm
+    container: debian:13
+    timeout-minutes: 30
+    env:
+      HEADERS_CACHE: ${{ github.workspace }}/.cache/kernel-headers
+    steps:
+      - name: Install checkout prerequisites
+        run: apt-get update && apt-get install -y --no-install-recommends git curl ca-certificates
+      - uses: actions/checkout@v4
+      - name: Cache pinned kernel headers
+        uses: actions/cache@v4
+        with:
+          path: .cache/kernel-headers
+          key: kernel-headers-${{ hashFiles('dev-tools/kernels.txt') }}
+      - name: Install build tools and pinned kernel headers
+        run: sh dev-tools/install-build-deps.sh
+      - name: All hardware-free checks (includes building and validating the package)
+        run: make check-all
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pwmstream-deb
+          path: dist/*.deb
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag must match VERSION file
+        run: test "${GITHUB_REF_NAME}" = "v$(cat VERSION)"
+      - uses: actions/download-artifact@v4
+        with:
+          name: pwmstream-deb
+          path: dist
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" dist/*.deb
+          --title "$GITHUB_REF_NAME" --generate-notes

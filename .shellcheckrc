@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
+# SC2088: a literal '~/' is matched deliberately (expanded on the remote side).
+# SC1007: 'CDPATH= cd' is the standard idiom for ignoring CDPATH.
+disable=SC2088,SC1007

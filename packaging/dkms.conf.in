@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# build-deb.sh substitutes @VERSION@ and installs this as dkms.conf.
+PACKAGE_NAME="pwmstream"
+PACKAGE_VERSION="@VERSION@"
+BUILT_MODULE_NAME[0]="pwmstream"
+DEST_MODULE_LOCATION[0]="/updates/dkms"
+AUTOINSTALL="yes"
+# Only the supported range is built; other kernels are skipped (dkms status 77),
+# so a kernel upgrade never fails because of this module. See docs/usage.md.
+BUILD_EXCLUSIVE_KERNEL="^6\.18\.([5-9][0-9]|[1-9][0-9]{2,})\+rpt-rpi-v8$"

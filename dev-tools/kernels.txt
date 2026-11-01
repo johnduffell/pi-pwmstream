@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+# Pinned Raspberry Pi kernel header packages for container/offline module builds.
+# Used by dev-tools/fetch-kernel-headers.sh. Fields: SHA256, path under BASE (HTTPS).
+# Only the current reviewed target is listed.
+# The archive may eventually remove old pool files; update the pins together
+# with the compatibility review, never to an unreviewed kernel.
+RELEASE=6.18.50+rpt-rpi-v8
+PACKAGE_VERSION=1:6.18.50-1+rpt1
+BASE=https://archive.raspberrypi.com/debian
+f6b0870fde0785a392ca131f758280b07670837b31acf475e49f27c896583f85 pool/main/l/linux/linux-base-6.18.50+rpt-rpi-v8_6.18.50-1+rpt1_arm64.deb
+551be6bbd198c9fd7a4ae2fb9b1ecb4a613d47bc42769155dc8eac3f956afcf8 pool/main/l/linux/linux-headers-6.18.50+rpt-common-rpi_6.18.50-1+rpt1_all.deb
+73f6bdca094e4780c38bcff022ac2fab0a754217df697c258273cd9d8019fa8d pool/main/l/linux/linux-headers-6.18.50+rpt-rpi-v8_6.18.50-1+rpt1_arm64.deb
+0318700efa4746d3086e54cf5705933835a94b0a4c545182c09e4c569a753a0a pool/main/l/linux/linux-kbuild-6.18.50+rpt_6.18.50-1+rpt1_arm64.deb

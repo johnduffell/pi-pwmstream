@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+# Edit this, then run `devenv generate` to rebuild shared/devcontainer.json.
+name: pi-pwmstream
+runArgs:
+  - "--name=pi-pwmstream"
+modules:
+  - mise
+  - github-copilot
+postCreateCommand:
+  - cmd: "sh dev-tools/install-build-deps.sh"
+    workingDirectory: "."
+  - cmd: "make -B cli abi-test && make check check-install check-harness check-preflight check-overlay && /home/vscode/.local/bin/mise exec -- copilot --version && ssh -V"
+    workingDirectory: "."
+  - cmd: "make check-kbuild"
+    workingDirectory: "."

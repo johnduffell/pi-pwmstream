@@ -1,0 +1,25 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# Removes our overlay file, only if config.txt is readable and no longer enables it.
+set -e
+case "$1" in
+purge | remove)
+	# Never edit config.txt; remove our overlay file only when the boot configuration is
+	# readable and nothing references it. /boot may alias /boot/firmware, so use one directory.
+	boot=${PWMSTREAM_BOOT_DIR:-}
+	if [ -z "$boot" ]; then
+		if [ -d /boot/firmware ]; then boot=/boot/firmware; else boot=/boot; fi
+	fi
+	overlay=$boot/overlays/pwmstream.dtbo
+	if [ -f "$overlay" ]; then
+		if [ ! -r "$boot/config.txt" ]; then
+			echo "pwmstream: left $overlay in place because $boot/config.txt is not readable." >&2
+		elif grep -Eq '^[[:space:]]*dtoverlay=pwmstream([[:space:],]|$)' "$boot/config.txt"; then
+			echo "pwmstream: left $overlay in place because config.txt still enables it." >&2
+		else
+			rm -f "$overlay"
+		fi
+	fi
+	;;
+esac
+exit 0

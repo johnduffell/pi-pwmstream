@@ -1,0 +1,37 @@
+// SPDX-License-Identifier: Apache-2.0
+// Minimal fixture for tests/overlay.sh; not a bootable Pi device tree.
+/dts-v1/;
+
+/ {
+	compatible = "raspberrypi,3-model-b-plus", "brcm,bcm2837";
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	soc {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x7e000000 0x3f000000 0x01000000>;
+		dma-ranges = <0xc0000000 0x00000000 0x3f000000>,
+			     <0x7e000000 0x3f000000 0x01000000>;
+
+		gpio: gpio@7e200000 {
+			compatible = "brcm,bcm2835-gpio";
+			reg = <0x7e200000 0xb4>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		dma: dma@7e007000 {
+			compatible = "brcm,bcm2835-dma";
+			reg = <0x7e007000 0xf00>;
+			#dma-cells = <1>;
+		};
+
+		pwm: pwm@7e20c000 {
+			compatible = "brcm,bcm2835-pwm";
+			reg = <0x7e20c000 0x28>;
+			#pwm-cells = <3>;
+			status = "disabled";
+		};
+	};
+};

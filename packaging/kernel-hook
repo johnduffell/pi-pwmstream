@@ -1,0 +1,14 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# Kernel postinst hook (installed as /etc/kernel/postinst.d/zz-pwmstream). Runs whenever a kernel
+# is installed and explains, without ever failing the kernel installation, when the new kernel is
+# outside the range pwmstream supports.
+kernel=${1:-}
+case "$kernel" in
+	6.18.[5-9][0-9]+rpt-rpi-v8 | 6.18.[1-9][0-9][0-9]*+rpt-rpi-v8) ;;
+	*+rpt-rpi-v8 | *rpi*)
+		echo "pwmstream: kernel $kernel is outside the supported range (6.18.N+rpt-rpi-v8, N>=50)." >&2
+		echo "pwmstream: the PWM driver will not load on it; see /usr/share/doc/pwmstream/usage.md. Keep the previous kernel selectable if you need the driver." >&2
+		;;
+esac
+exit 0
