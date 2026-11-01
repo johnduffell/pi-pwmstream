@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
+# Runs `make check-all` on every push to main and pull request. A tag vX.Y.Z equal to VERSION also
+# publishes the .deb as a GitHub release.
 name: CI
 
 on:
@@ -24,20 +26,16 @@ jobs:
     env:
       HEADERS_CACHE: ${{ github.workspace }}/.cache/kernel-headers
     steps:
-      - name: Install tools
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends \
-            build-essential device-tree-compiler python3 kmod curl ca-certificates git \
-            sparse shellcheck cppcheck dkms lintian
+      - name: Install checkout prerequisites
+        run: apt-get update && apt-get install -y --no-install-recommends git curl ca-certificates
       - uses: actions/checkout@v4
       - name: Cache pinned kernel headers
         uses: actions/cache@v4
         with:
           path: .cache/kernel-headers
           key: kernel-headers-${{ hashFiles('dev-tools/kernels.txt') }}
-      - name: Fetch and install pinned kernel headers
-        run: sh dev-tools/fetch-kernel-headers.sh --install
+      - name: Install build tools and pinned kernel headers
+        run: sh dev-tools/install-build-deps.sh
       - name: All hardware-free checks (includes building and validating the package)
         run: make check-all
       - uses: actions/upload-artifact@v4

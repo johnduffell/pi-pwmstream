@@ -1,9 +1,13 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
-# Read-only inventory of the pwmstream installation on the running Pi.
-# No sudo, unbinding, module (un)loading or device access. Output is stable
-# so snapshots taken before/after a step can be compared with diff.
-# Override BOOT_DIR to inspect a non-default firmware directory.
+# pwmstream-report: read-only inventory of the pwmstream installation on the running Pi
+# (installed as /usr/bin/pwmstream-report).
+# When to use: first thing to run when something doesn't work, and attach its output to a bug
+# report. It first checks GitHub for a newer release (its only network access) and stops if yours is
+# out of date unless you pass --force.
+# Safety: no sudo, unbinding, module (un)loading or device access. Output is stable so snapshots
+# taken before and after a step can be compared with diff. Set BOOT_DIR to inspect a non-default
+# firmware directory.
 set -u
 PATH="$PATH:/usr/sbin:/sbin"
 release_url=${PWMSTREAM_RELEASE_URL:-https://api.github.com/repos/johnduffell/pi-pwmstream/releases/latest}

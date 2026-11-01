@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-only
-/* BCM2837 PWM0 serializer for Pi downstream 6.18.50+ kernels. */
+/*
+ * pwmstream: streams a user-supplied bit pattern out of GPIO18 on a Raspberry Pi 3B+, serialised
+ * by the BCM2837 PWM0 block and fed by a cyclic DMA transfer, so the CPU is not involved while it
+ * runs. It replaces the standard PWM driver for that block via the pwmstream overlay, and only
+ * loads on the reviewed kernel range (6.18.50+ downstream kernels). Dual-licensed for kernel
+ * integration. Design: docs/design.md; interface: docs/abi.md and pwmstream.h.
+ */
 #include <linux/bitfield.h>
 #include <linux/clk.h>
 #include <linux/compat.h>

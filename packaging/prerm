@@ -1,5 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
+# Removes the DKMS module, and warns if the overlay is still enabled so it can be disabled.
 set -e
 case "$1" in
 remove | upgrade | deconfigure)

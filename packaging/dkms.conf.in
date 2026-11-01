@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+# build-deb.sh substitutes @VERSION@ and installs this as dkms.conf.
 PACKAGE_NAME="pwmstream"
 PACKAGE_VERSION="@VERSION@"
 BUILT_MODULE_NAME[0]="pwmstream"

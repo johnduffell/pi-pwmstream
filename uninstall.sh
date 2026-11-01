@@ -1,7 +1,10 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
-# Manual-install removal: previews by default, --remove deletes the module, CLI and overlay for the
-# running kernel. Does not touch DKMS or package files.
+# uninstall: removes a manual (non-package) install: the module, CLI and overlay for the running
+# kernel.
+# When to use: `make uninstall` (previews by default; --remove deletes). Disable the overlay in
+# config.txt and reboot first: it refuses while the module is loaded or the overlay is active.
+# For a package install use apt remove instead. Does not touch DKMS or package files.
 set -eu
 remove=0
 case "${1:-}" in

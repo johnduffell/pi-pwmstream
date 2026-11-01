@@ -1,7 +1,8 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
-# Kernel postinst hook: explain, without ever failing the kernel installation,
-# when a newly installed kernel is outside the range pwmstream supports.
+# Kernel postinst hook (installed as /etc/kernel/postinst.d/zz-pwmstream). Runs whenever a kernel
+# is installed and explains, without ever failing the kernel installation, when the new kernel is
+# outside the range pwmstream supports.
 kernel=${1:-}
 case "$kernel" in
 	6.18.[5-9][0-9]+rpt-rpi-v8 | 6.18.[1-9][0-9][0-9]*+rpt-rpi-v8) ;;

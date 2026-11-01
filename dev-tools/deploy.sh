@@ -1,5 +1,11 @@
 #!/bin/bash
 # SPDX-License-Identifier: Apache-2.0
+# deploy: copies the sources to a Pi over ssh and builds there (optionally installing the module
+# and running the hardware tests).
+# When to use: to test the driver on a real Pi 3B+ from a development machine, including one with
+# no local kernel headers. Needs only ssh and bash locally. Never run by CI.
+# Safety: never installs packages, edits boot files or reboots; --install-reload and --test change
+# the Pi and emit waveforms, so they only run when asked. See docs/development.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -60,7 +66,7 @@ else
     exit 1
 fi
 create_stage() {
-    # Keep the heredoc outside $(...) for macOS Bash 3.2 parsing.
+    # Keep the heredoc outside $(...) for old Bash (3.2) parsing on non-Linux hosts.
     ssh "$host" "sh -s -- '$destination' '$id'" <<'REMOTE'
 set -eu
 case "$1" in '~/'*) base="$HOME/${1#\~/}" ;; *) base=$1 ;; esac
@@ -73,7 +79,7 @@ printf '%s\n' "$stage"
 REMOTE
 }
 deploy() {
-    # Resolve ~ using the remote HOME, not the Mac user's home.
+    # Resolve ~ using the remote HOME, not the local user's home.
     remote=$(create_stage)
     safe_path "$remote" && [[ $remote == /* ]] ||
         { echo "Invalid remote staging response" >&2; return 1; }

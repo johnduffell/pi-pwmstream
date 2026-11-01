@@ -1,4 +1,10 @@
 /* SPDX-License-Identifier: Apache-2.0 */
+/*
+ * pwmstream-cli: command-line client for /dev/pwmstream0. `status` is a read-only observer; `run
+ * SAMPLE [BIT_RATE_HZ]` uploads a pattern file, starts output and holds the controlling
+ * descriptor until stopped, with interactive stop/start/rate/quit commands. Installed as
+ * /usr/bin/pwmstream-cli. See docs/usage.md.
+ */
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <fcntl.h>

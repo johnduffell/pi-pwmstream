@@ -1,9 +1,11 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
-# Download and verify the pinned Raspberry Pi kernel header packages.
-# Default: download and verify only. --install also installs them with apt
-# (administrator privileges); apt resolves Debian dependencies such as
-# gcc-14-for-host. Does not touch the Pi, boot settings or hardware.
+# fetch-kernel-headers: downloads and SHA-256-verifies the pinned Raspberry Pi kernel header
+# packages listed in dev-tools/kernels.txt, so the module can be built without a Pi.
+# When to use: once when setting up a development machine (install-build-deps.sh runs it).
+# Default is download and verify only; --install also installs them with apt (administrator
+# privileges, which also resolves Debian dependencies such as gcc-14-for-host).
+# Safety: does not touch a Pi, boot settings or hardware.
 set -eu
 install=0
 case "${1:-}" in

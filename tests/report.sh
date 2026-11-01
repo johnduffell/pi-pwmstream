@@ -1,7 +1,9 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
+# Checks that pwmstream-report's update check behaves: it stops when a newer release exists unless
+# --force, and carries on when offline, not installed or without curl. Uses a mock dpkg-query and a
+# file:// release reply, so there is no network access.
 set -eu
-# pwmstream-report update check against a mock dpkg-query and a file:// release reply.
 work="$PWD/.report-check"
 mkdir "$work"
 trap 'rm -rf "$work"' EXIT HUP INT TERM

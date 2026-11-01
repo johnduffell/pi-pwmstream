@@ -12,20 +12,18 @@ Everything here uses the scripts in `dev-tools/` and the checks in `tests/`. Non
 
 Which setup to use:
 
-| Your machine                         | Route                                                                                                                                                    |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| arm64 Linux, or an Apple Silicon Mac | The devcontainer (below), then `make check-all`                                                                                                          |
-| x86 Linux, Intel Mac or Windows      | The devcontainer under arm64 emulation (untested), or the Pi route                                                                                       |
-| Any machine with a Pi 3              | `dev-tools/deploy.sh` builds and tests on the Pi; see [Testing on a Pi](#testing-on-a-pi). Needs only `ssh` and bash, but skips the hardware-free checks |
+| Your machine                             | Route                                                                                                                                                    |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| arm64 Linux, or an arm64 non-Linux host  | The devcontainer (below), then `make check-all`                                                                                                          |
+| x86 Linux, x86 non-Linux host or Windows | The devcontainer under arm64 emulation (untested), or the Pi route                                                                                       |
+| Any machine with a Pi 3                  | `dev-tools/deploy.sh` builds and tests on the Pi; see [Testing on a Pi](#testing-on-a-pi). Needs only `ssh` and bash, but skips the hardware-free checks |
 
 No Pi is needed to build the module. You need a Debian 13 arm64 environment with the pinned kernel
 headers. The easiest option is the optional [devcontainer](../.devcontainer/README.md), which sets
 this up for you. Otherwise, on any Debian 13 arm64 machine:
 
 ```sh
-sudo apt-get install -y --no-install-recommends build-essential device-tree-compiler python3 kmod \
-  openssh-client sparse shellcheck cppcheck dkms lintian
-sh dev-tools/fetch-kernel-headers.sh --install
+sh dev-tools/install-build-deps.sh   # build and lint packages, then the pinned kernel headers
 ```
 
 ```sh
@@ -47,9 +45,9 @@ make check-all   # every check below; this is what CI runs
 `dev-tools/fetch-kernel-headers.sh --install` downloads the headers pinned in
 `dev-tools/kernels.txt`, verifies their SHA-256 and installs them. Update the pins together with a
 compatibility review, never to an unreviewed kernel.
-`make module KDIR=/path/to/configured/kernel/build` builds against another tree; macOS cannot build
-Linux modules and its ioctl encodings differ, so rebuild the CLI on Linux. `make deb` builds the
-package into `dist/pwmstream_<version>_arm64.deb` (it needs `dtc`).
+`make module KDIR=/path/to/configured/kernel/build` builds against another tree; a non-Linux host
+cannot build Linux modules and its ioctl encodings differ, so rebuild the CLI on Linux. `make deb`
+builds the package into `dist/pwmstream_<version>_arm64.deb` (it needs `dtc`).
 
 These checks prove the code builds and the scripts behave. They do not load the module or touch
 hardware.

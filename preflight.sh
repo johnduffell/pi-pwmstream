@@ -1,6 +1,11 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
-# Read-only checks. No unbinding, clock changes, or hardware commands.
+# preflight: checks that this Pi can safely run the driver (board, kernel range, headers, PWM
+# binding, DMA controller, audio and raw-memory users).
+# When to use: run by `make preflight` and `make install` for a manual install, and shipped as
+# /usr/lib/pwmstream/preflight for pwmstream-enable. Options: --build-only (headers and kernel
+# only), --no-headers.
+# Safety: read-only. No unbinding, clock changes or hardware commands.
 set -eu
 fail=0
 error() { printf 'ERROR: %s\n' "$*" >&2; fail=1; }

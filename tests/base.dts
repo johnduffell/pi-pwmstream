@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+// Minimal fixture for tests/overlay.sh; not a bootable Pi device tree.
 /dts-v1/;
 
-/* Minimal structural fixture, not a bootable Pi device tree. */
 / {
 	compatible = "raspberrypi,3-model-b-plus", "brcm,bcm2837";
 	#address-cells = <1>;

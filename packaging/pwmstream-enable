@@ -1,7 +1,9 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
-# Explicit, reversible boot configuration for the pwmstream driver. Never
-# reboots, loads the module or touches hardware; it edits config.txt only after
+# pwmstream-enable: the one step that turns the driver on. Adds dtoverlay=pwmstream to config.txt
+# and installs the overlay (installed as /usr/sbin/pwmstream-enable).
+# When to use: once after installing the package, then reboot; --dry-run previews and --disable
+# reverses it. Never reboots, loads the module or touches hardware: it edits config.txt only after
 # the read-only ownership preflight passes, and keeps a timestamped backup.
 set -eu
 libdir=${PWMSTREAM_LIBDIR:-/usr/lib/pwmstream}

@@ -1,5 +1,10 @@
 #!/bin/bash
 # SPDX-License-Identifier: Apache-2.0
+# test: runs the ABI, scope and lifecycle tests against the loaded pwmstream driver.
+# When to use: on the Pi, normally started by deploy.sh --test from the run directory it created;
+# can also be run by hand there. The default is a read-only ABI observer; anything that changes
+# state or emits waveforms needs --hardware. See docs/development.md.
+# Safety: use a test-safe Pi with a safe load on pin 12.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mode=--abi

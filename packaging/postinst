@@ -1,5 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
+# Warns about a manually installed module that would conflict with the DKMS one.
 set -e
 case "$1" in
 configure)

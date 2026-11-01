@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
+// Device-tree overlay (built to pwmstream.dtbo and enabled with dtoverlay=pwmstream): hands the Pi
+// 3B+ PWM block to this driver by replacing its compatible string, wires it to the PWM DMA request,
+// and defines the GPIO18 idle (input, pull-down) and active (ALT5 PWM0) pin states. Installed by
+// pwmstream-enable or `make install`.
 /dts-v1/;
 /plugin/;
 

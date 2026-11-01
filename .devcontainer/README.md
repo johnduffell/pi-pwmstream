@@ -29,14 +29,14 @@ make check-all
 ```
 
 If creation reported `[setup] Errored!`, see `/var/log/post-create.log`. To repeat the header step
-by hand: `sh dev-tools/fetch-kernel-headers.sh --install && make check-kbuild`.
+by hand: `sh dev-tools/install-build-deps.sh && make check-kbuild`.
 
 Notes:
 
 - The container needs network access and `sudo` on creation. It is not privileged and mounts no
   hardware or Docker socket; only the project folder is shared with the host.
-- Binaries built on a Mac are the wrong format for Linux. Run `make clean` before building in the
-  container.
+- Binaries built on a non-Linux host are the wrong format for Linux. Run `make clean` before
+  building in the container.
 - The Docker container name is fixed as `pi-pwmstream`, so only one can exist at a time. Remove the
   old one before recreating it.
 - `user/devcontainer.json` (git-ignored) is an optional variant that merges your personal devenv

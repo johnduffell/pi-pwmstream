@@ -1,4 +1,9 @@
 /* SPDX-License-Identifier: Apache-2.0 */
+/*
+ * pwmstream-test: native test client for the pwmstream ABI. --selftest checks ABI layout and
+ * parsing with no device (run by `make check`); the other modes need the loaded driver on a Pi and
+ * emit waveforms. Started by dev-tools/test.sh; see docs/development.md.
+ */
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <fcntl.h>
@@ -561,7 +566,7 @@ int main(int argc, char **argv)
 		return 0;
 	}
 #ifndef __linux__
-	fprintf(stderr, "Runtime tests require native Linux ioctl encodings. Use --selftest on macOS.\n");
+	fprintf(stderr, "Runtime tests require native Linux ioctl encodings. Use --selftest on a non-Linux host.\n");
 	return 2;
 #endif
 	CHECK(atexit(at_exit) == 0);

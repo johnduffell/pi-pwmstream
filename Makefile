@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
+# Build entry point; `make help` lists the targets. Under kbuild (KERNELRELEASE set) this file only
+# names the module.
 ifneq ($(KERNELRELEASE),)
 obj-m := pwmstream.o
 else

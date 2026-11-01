@@ -1,7 +1,8 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
-# Build pwmstream_<version>_arm64.deb with plain dpkg-deb. Usage: build-deb.sh [outdir]
-# Needs a built pwmstream-cli and pwmstream.dtbo (make cli overlay); no kernel headers.
+# build-deb: builds pwmstream_<version>_arm64.deb with plain dpkg-deb. Usage: build-deb.sh [outdir]
+# When to use: `make deb`. Needs a built pwmstream-cli and pwmstream.dtbo (make cli overlay) but
+# no kernel headers, because DKMS builds the module on the target.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(dirname "$here")

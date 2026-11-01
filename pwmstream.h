@@ -1,4 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
+/*
+ * pwmstream ABI: the ioctl interface to /dev/pwmstream0, shared by the kernel module and user
+ * space. Versioned (PWMSTREAM_ABI_VERSION); the semantics and error codes are in docs/abi.md.
+ */
 #ifndef PWMSTREAM_H
 #define PWMSTREAM_H
 

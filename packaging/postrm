@@ -1,5 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
+# Removes our overlay file, only if config.txt is readable and no longer enables it.
 set -e
 case "$1" in
 purge | remove)
