@@ -1,5 +1,7 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
+# Checks that make install/uninstall gate before writing anything, using mock files and a mock
+# preflight. Never touches the host.
 set -eu
 work="$PWD/.install-check-$$"
 mkdir "$work"
@@ -12,7 +14,7 @@ sed -e "s|/lib/modules/|$work/lib/modules/|g" \
 	-e "s|/boot/|$work/boot/|g" -e "s|/usr/local/|$work/usr/local/|g" \
 	-e "s|/sys/|$work/sys/|g" uninstall.sh > "$work/uninstall.sh"
 export INSTALL_LOG="$work/commands"
-cat > "$work/check-install.sh" <<'MOCK'
+cat > "$work/preflight.sh" <<'MOCK'
 #!/bin/sh
 echo preflight >> "$INSTALL_LOG"
 test "${FAIL_PREFLIGHT:-0}" = 0
@@ -93,7 +95,7 @@ deny_remove
 rmdir "$work/sys/module/pwmstream"
 mkdir -p "$work/sys/bus/platform/devices/3f20c000.pwm/of_node"
 compatible="$work/sys/bus/platform/devices/3f20c000.pwm/of_node/compatible"
-printf 'pixel,bcm2837-pwmstream\000' > "$compatible"
+printf 'pwmstream,bcm2837-pwmstream\000' > "$compatible"
 deny_remove
 rm "$compatible"
 sh uninstall.sh --remove > "$work/output" 2>&1

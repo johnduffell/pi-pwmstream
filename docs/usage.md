@@ -14,7 +14,8 @@ one DMA channel. It is experimental: see the warning in the README before connec
 
 ## Compatibility policy
 
-Supported: Raspberry Pi 3 B/B+ (BCM2837), Raspberry Pi OS Debian 13 arm64.
+Supported: Raspberry Pi 3 B+ (BCM2837B0), Raspberry Pi OS Debian 13 arm64. Other boards, including
+the plain 3 B, are rejected.
 
 | Kernel                      | Behaviour                                                      |
 | --------------------------- | -------------------------------------------------------------- |

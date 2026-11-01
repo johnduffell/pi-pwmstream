@@ -1,7 +1,9 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
+# Checks that preflight.sh rejects the wrong board, kernel, headers, PWM binding and audio/raw
+# memory users, using synthetic paths.
 set -eu
-# Exercise a copy against synthetic paths; never inspect/change host hardware.
+# Never inspect or change host hardware.
 work="$PWD/.preflight-check"
 mkdir "$work"
 trap 'rm -rf "$work"' EXIT HUP INT TERM
@@ -10,7 +12,7 @@ mkdir -p "$work/bin" "$work/dev" "$work/proc/device-tree" "$work/headers" \
 	"$work/sys/bus/platform/devices/3f007000.dma-controller/of_node"
 sed -e "s|/proc/|$work/proc/|g" -e "s|/sys/|$work/sys/|g" \
 	-e "s|/boot/|$work/boot/|g" -e "s|/dev/|$work/dev/|g" \
-	check-install.sh > "$work/check.sh"
+	preflight.sh > "$work/check.sh"
 cat > "$work/bin/uname" <<'EOF'
 #!/bin/sh
 case "$1" in

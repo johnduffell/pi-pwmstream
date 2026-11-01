@@ -1,5 +1,7 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
+# Checks that the overlay replaces exactly one PWM node and keeps its reg, by merging it into a
+# fixture base tree (not a bootable board).
 set -eu
 # Run from the repository root. Never use a system temporary directory.
 work=.overlay-check
@@ -8,7 +10,7 @@ trap 'rm -f "$work/base.dtb" "$work/merged.dtb"; rmdir "$work"' EXIT HUP INT TER
 "${DTC:-dtc}" -Wno-unit_address_vs_reg -@ -I dts -O dtb -o "$work/base.dtb" tests/base.dts
 fdtoverlay -i "$work/base.dtb" -o "$work/merged.dtb" pwmstream.dtbo
 node=/soc/pwm@7e20c000
-test "$(fdtget "$work/merged.dtb" "$node" compatible)" = pixel,bcm2837-pwmstream
+test "$(fdtget "$work/merged.dtb" "$node" compatible)" = pwmstream,bcm2837-pwmstream
 test "$(fdtget "$work/merged.dtb" "$node" status)" = okay
 test "$(fdtget -t x "$work/merged.dtb" "$node" reg)" = "7e20c000 28"
 test "$(fdtget "$work/merged.dtb" "$node" pinctrl-names)" = "default active"

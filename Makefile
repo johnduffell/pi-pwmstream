@@ -78,7 +78,7 @@ check-install:
 	sh ./tests/report.sh
 
 check-build:
-	KDIR="$(KDIR)" sh ./check-install.sh --build-only
+	KDIR="$(KDIR)" sh ./preflight.sh --build-only
 
 # Pi-free: builds in a scratch copy against the pinned headers from dev-tools/kernels.txt.
 check-kbuild:
@@ -88,7 +88,7 @@ check-static:
 	sh ./tests/static.sh
 
 preflight:
-	KDIR="$(KDIR)" sh ./check-install.sh
+	KDIR="$(KDIR)" sh ./preflight.sh
 
 # Deliberately does not edit config.txt, load the module, or change hardware.
 install: preflight

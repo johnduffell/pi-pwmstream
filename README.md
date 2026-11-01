@@ -19,7 +19,7 @@ the default.
 
 You need:
 
-- a **Raspberry Pi 3 B or 3 B+** (other boards are not supported),
+- a **Raspberry Pi 3 B+** (the plain 3 B and other boards are not supported),
 - **Raspberry Pi OS (Debian 13, 64-bit)** with a `6.18.N+rpt-rpi-v8` kernel where N is 50 or higher.
   Check with `uname -r`,
 - **GPIO18 and the PWM hardware to yourself.** The driver takes over PWM0 and the Pi's PWM audio
@@ -65,11 +65,11 @@ A scope or logic analyser on pin 12 (and ground) now shows a **31.25 kHz square 
 pattern repeats every 32 microseconds. Press Ctrl-C to stop. In a second terminal,
 `pwmstream-cli status` shows what the driver is doing.
 
-**Pattern files** are raw bytes, sent most-significant bit first, repeating forever. They must be a
-multiple of 4 bytes, from 4 bytes to 1 MiB. For example `AA AA AA AA` gives alternating bits, so at
-50 Mbit/s (the default rate) it makes a 25 MHz square wave. While `pwmstream-cli run` is active you
-can type `status`, `stop`, `rate 25000000`, `start` or `quit`. If you ask for a rate the clock can't
-hit exactly, `status` shows both the requested and the actual rate.
+**Pattern files** are raw bytes, sent most-significant bit first and repeating forever: 4 bytes to 1
+MiB, a multiple of 4. `AA AA AA AA` gives alternating bits, so at the default 50 Mbit/s it makes a
+25 MHz square wave. While `pwmstream-cli run` is active you can type commands such as `status` and
+`rate 25000000` to change it live. The [user guide](docs/usage.md#using-the-cli) has the full
+format, commands and rate behaviour.
 
 ## Keeping it working
 
@@ -116,15 +116,14 @@ More detail (compatibility policy, manual install, failure behaviour) is in the
 
 ## Developing and contributing
 
-Contributions are welcome, and **all you need is a computer**. The devcontainer (Debian 13, arm64)
-builds the kernel module against pinned Pi kernel headers and runs a full hardware-free check suite,
-which is the same one CI runs, so you can fix bugs, improve docs or add support for a newer kernel
-without owning a Pi. If you do have a Pi 3, you can also run the hardware tests on it.
+Contributions are welcome, and **all you need is a computer**: the devcontainer runs the same
+hardware-free checks as CI, so you can fix bugs, improve docs or add support for a newer kernel
+without a Pi. If you do have a Pi 3B+, you can also run the hardware tests on it.
 
 Found a bug or want something added?
 [Open an issue](https://github.com/johnduffell/pi-pwmstream/issues), or send a pull request.
-[CONTRIBUTING.md](CONTRIBUTING.md) has the setup, the repository layout, how to run the checks and
-Pi tests, licensing and the hardware-safety rules.
+[CONTRIBUTING.md](CONTRIBUTING.md) has the setup, the repository layout, licensing and the
+hardware-safety rules.
 
 ## Licence
 

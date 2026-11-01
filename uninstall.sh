@@ -1,5 +1,7 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
+# Manual-install removal: previews by default, --remove deletes the module, CLI and overlay for the
+# running kernel. Does not touch DKMS or package files.
 set -eu
 remove=0
 case "${1:-}" in
@@ -25,7 +27,7 @@ if [ "$remove" -eq 1 ]; then
 	[ ! -d /sys/module/pwmstream ] ||
 		{ echo "pwmstream is loaded; close clients and unload normally before removal." >&2; exit 1; }
 	compatible=/sys/bus/platform/devices/3f20c000.pwm/of_node/compatible
-	if [ -r "$compatible" ] && tr '\000' '\n' < "$compatible" | grep -qx 'pixel,bcm2837-pwmstream'; then
+	if [ -r "$compatible" ] && tr '\000' '\n' < "$compatible" | grep -qx 'pwmstream,bcm2837-pwmstream'; then
 		echo "Boot overlay is active; remove dtoverlay=pwmstream from boot configuration and reboot first." >&2
 		exit 1
 	fi

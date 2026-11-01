@@ -110,12 +110,11 @@ electrical qualification are **not** covered.
 
 ## Higher bit rates
 
-The default stays at 50 Mbit/s. Rates up to a nominal 100 Mbit/s have been seen to work for short
-patterns; nothing above is planned. When trying a candidate rate (62.5, ~83.3, 100 Mbit/s), increase
-step by step with `status`, `stop`, `rate N`, `start`, watching for errors for at least a minute,
-and stop and collect logs if quality deteriorates. For `FF FF 00 00` the output frequency is
-`actual_rate / 32`; for alternating bits it is `actual_rate / 2`. Scope bandwidth and probe loading
-limit measured amplitude and shape.
+The default is 50 Mbit/s; the rate limits and what could limit the pin are in
+[design.md](design.md#rates-and-limits). To try a candidate rate (62.5, ~83.3, 100 Mbit/s), step up
+with `status`, `stop`, `rate N`, `start`, watch for errors for at least a minute, and stop and
+collect logs if quality deteriorates. Scope bandwidth and probe loading limit the measured amplitude
+and shape.
 
 ## Remaining acceptance testing
 
@@ -166,8 +165,8 @@ widened, which needs the full process.
 5. **Update the range and baseline.** These places hard-code the kernel version, so change them
    together:
    - `pwmstream.c`: `PS_REVIEWED_RELEASE`, `PS_MIN_PATCH` and `ps_release_supported()`.
-   - `check-install.sh`, `packaging/pwmstream-enable`, `packaging/postinst`, `dev-tools/test.sh` and
-     `tests/remote-build.sh`: the range check and its message.
+   - `preflight.sh`, `packaging/pwmstream-enable`, `packaging/postinst`, `dev-tools/test.sh` and
+     `dev-tools/remote-build.sh`: the range check and its message.
    - `packaging/dkms.conf.in` (`BUILD_EXCLUSIVE_KERNEL`) and `packaging/kernel-hook`: the range
      patterns, plus the package description in `packaging/build-deb.sh`.
    - `tests/package.sh`, `tests/preflight.sh` and `tests/harness.sh`: the range cases and mock

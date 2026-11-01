@@ -23,9 +23,9 @@ install -m 0644 "$root/pwmstream.c" "$root/pwmstream.h" "$here/Kbuild" "$stage/u
 sed "s/@VERSION@/$version/" "$here/dkms.conf.in" > "$stage/usr/src/$pkg-$version/dkms.conf"
 chmod 0644 "$stage/usr/src/$pkg-$version/dkms.conf"
 install -m 0755 -s "$root/pwmstream-cli" "$stage/usr/bin/pwmstream-cli"
-install -m 0755 "$root/install-state.sh" "$stage/usr/bin/pwmstream-report"
+install -m 0755 "$root/pwmstream-report.sh" "$stage/usr/bin/pwmstream-report"
 install -m 0755 "$here/pwmstream-enable" "$stage/usr/sbin/pwmstream-enable"
-install -m 0755 "$root/check-install.sh" "$stage/usr/lib/$pkg/check-install"
+install -m 0755 "$root/preflight.sh" "$stage/usr/lib/$pkg/preflight"
 install -m 0644 "$root/pwmstream.dtbo" "$stage/usr/share/$pkg/pwmstream.dtbo"
 install -m 0644 "$here/60-pwmstream.rules" "$stage/usr/lib/udev/rules.d/60-pwmstream.rules"
 install -m 0755 "$here/kernel-hook" "$stage/etc/kernel/postinst.d/zz-pwmstream"
@@ -53,7 +53,7 @@ Homepage: https://github.com/johnduffell/pi-pwmstream
 Description: PWM/DMA bitstream output driver for Raspberry Pi 3 (DKMS)
  Streams a user-supplied bit pattern out of GPIO18 (PWM0) using DMA at up to
  50 Mbit/s. Supports Raspberry Pi OS kernels 6.18.N+rpt-rpi-v8 (N >= 50) on
- the Pi 3 B/B+ only. The module is built by DKMS for each installed kernel.
+ the Pi 3B+ only. The module is built by DKMS for each installed kernel.
  Nothing is enabled by installing this package: run pwmstream-enable
  explicitly, then reboot.
 CTL

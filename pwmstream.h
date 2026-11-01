@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-#ifndef PIXEL_PWMSTREAM_H
-#define PIXEL_PWMSTREAM_H
+#ifndef PWMSTREAM_H
+#define PWMSTREAM_H
 
 #ifdef __KERNEL__
 #include <linux/ioctl.h>

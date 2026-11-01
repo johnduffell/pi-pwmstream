@@ -25,7 +25,7 @@
 		target = <&pwm>;
 		__overlay__ {
 			/* Replace the existing node's match, never add a second owner. */
-			compatible = "pixel,bcm2837-pwmstream";
+			compatible = "pwmstream,bcm2837-pwmstream";
 			pinctrl-names = "default", "active";
 			pinctrl-0 = <&pwmstream_idle>;
 			pinctrl-1 = <&pwmstream_active>;

@@ -18,7 +18,7 @@ dpkg-deb -x "$deb" "$work/root"
 dpkg-deb -e "$deb" "$work/ctl"
 ok
 
-for f in usr/bin/pwmstream-cli usr/bin/pwmstream-report usr/sbin/pwmstream-enable usr/lib/pwmstream/check-install \
+for f in usr/bin/pwmstream-cli usr/bin/pwmstream-report usr/sbin/pwmstream-enable usr/lib/pwmstream/preflight \
 	usr/share/pwmstream/pwmstream.dtbo usr/src/pwmstream-"$(cat VERSION)"/{pwmstream.c,pwmstream.h,Kbuild,dkms.conf} \
 	usr/share/doc/pwmstream/copyright usr/share/doc/pwmstream/usage.md etc/kernel/postinst.d/zz-pwmstream \
 	usr/lib/udev/rules.d/60-pwmstream.rules; do
@@ -97,9 +97,9 @@ done
 enable="$work/root/usr/sbin/pwmstream-enable"
 fake="$work/boot"
 mkdir -p "$fake/overlays" "$work/lib" "$work/stubs"
-printf '#!/bin/sh\nexit 0\n' > "$work/lib/check-install"
+printf '#!/bin/sh\nexit 0\n' > "$work/lib/preflight"
 printf '#!/bin/sh\necho /stub\n' > "$work/stubs/modinfo"
-chmod +x "$work/lib/check-install" "$work/stubs/modinfo"
+chmod +x "$work/lib/preflight" "$work/stubs/modinfo"
 export PWMSTREAM_BOOT_DIR="$fake" PWMSTREAM_LIBDIR="$work/lib" PWMSTREAM_SHAREDIR="$work/root/usr/share/pwmstream" PWMSTREAM_MODINFO="$work/stubs/modinfo"
 printf 'dtparam=audio=off\ndtoverlay=vc4-kms-v3d\n' > "$fake/config.txt"
 before=$(sha256sum < "$fake/config.txt")

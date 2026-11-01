@@ -1,5 +1,7 @@
 #!/bin/bash
 # SPDX-License-Identifier: Apache-2.0
+# Checks dev-tools/deploy.sh, test.sh and remote-build.sh against mocked ssh/scp/sudo: gating,
+# failure propagation and cleanup. Never contacts a Pi.
 set -euo pipefail
 # All mocks/artifacts live under the project and are removed on exit.
 work="$PWD/.harness-check-$$"
@@ -9,9 +11,9 @@ trap 'exit 130' INT
 trap 'exit 143' TERM HUP
 mkdir -p "$work/source/tests" "$work/source/dev-tools" "$work/bin"
 cp Makefile pwmstream.c pwmstream.h pwmstream-cli.c pwmstream-overlay.dts \
-    check-install.sh install-state.sh uninstall.sh README.md "$work/source/"
-cp dev-tools/deploy.sh dev-tools/test.sh "$work/source/dev-tools/"
-cp tests/base.dts tests/overlay.sh tests/preflight.sh tests/remote-build.sh \
+    preflight.sh pwmstream-report.sh uninstall.sh README.md "$work/source/"
+cp dev-tools/deploy.sh dev-tools/test.sh dev-tools/remote-build.sh "$work/source/dev-tools/"
+cp tests/base.dts tests/overlay.sh tests/preflight.sh tests/report.sh \
     tests/pwmstream-test.c tests/harness.sh tests/install.sh "$work/source/tests/"
 export MOCK_LOG="$work/commands" MOCK_STAGE="$work/remote-stage"
 export PATH="$work/bin:$PATH"
@@ -137,25 +139,25 @@ done
         builtin command "$@"
     }
     export -f command
-    reject bash tests/remote-build.sh build
+    reject bash dev-tools/remote-build.sh build
     grep -q 'Missing modinfo' "$work/output"
     ! grep -q '^make ' "$MOCK_LOG"
     ! grep -q '^sudo ' "$MOCK_LOG"
 )
 : > "$MOCK_LOG"
-bash tests/remote-build.sh build > "$work/output" 2>&1
+bash dev-tools/remote-build.sh build > "$work/output" 2>&1
 grep -q '^make module W=1$' "$MOCK_LOG"
 ! grep -q '^sudo ' "$MOCK_LOG"
 : > "$MOCK_LOG"
-MOCK_DENY_SUDO=1 reject bash tests/remote-build.sh install
+MOCK_DENY_SUDO=1 reject bash dev-tools/remote-build.sh install
 grep -q 'requires non-interactive sudo' "$work/output"
 ! grep -q '^make ' "$MOCK_LOG"
 ! grep -q '^sudo -n modprobe' "$MOCK_LOG"
 : > "$MOCK_LOG"
-MOCK_FAIL_BUILD=1 reject bash tests/remote-build.sh install
+MOCK_FAIL_BUILD=1 reject bash dev-tools/remote-build.sh install
 ! grep -q '^sudo -n modprobe -r ' "$MOCK_LOG"
 : > "$MOCK_LOG"
-reject bash tests/remote-build.sh install
+reject bash dev-tools/remote-build.sh install
 grep -q '^sudo -n modprobe -r pwmstream$' "$MOCK_LOG"
 ! grep -q 'modules_install' "$MOCK_LOG"
 ! grep -q '^sudo -n modprobe pwmstream$' "$MOCK_LOG"

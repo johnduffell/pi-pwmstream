@@ -60,7 +60,7 @@ if ! "$modinfo_cmd" -n pwmstream >/dev/null 2>&1; then
 	echo "No pwmstream module for kernel $(uname -r). Check: dkms status; the kernel must be 6.18.N+rpt-rpi-v8 (N>=50) with headers installed." >&2
 	exit 1
 fi
-"$libdir/check-install" --no-headers
+"$libdir/preflight" --no-headers
 bad=$(grep -En '^[[:space:]]*(dtparam=audio=(on|1)\b|dtoverlay=(pwm|pwm-2chan|audremap|i2s-[a-z-]+)(,|[[:space:]]|$))' "$config" || true)
 if [ -n "$bad" ]; then
 	echo "These lines in $config conflict with PWM0/GPIO18; disable them first:" >&2

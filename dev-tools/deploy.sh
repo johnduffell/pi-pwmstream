@@ -47,8 +47,9 @@ mkdir -p .harness-artifacts
 mkdir ".harness-artifacts/$id"
 artifacts="$PWD/.harness-artifacts/$id"
 sources=(Makefile pwmstream.c pwmstream.h pwmstream-cli.c pwmstream-overlay.dts
-    check-install.sh install-state.sh uninstall.sh README.md dev-tools/deploy.sh dev-tools/test.sh
-    tests/base.dts tests/overlay.sh tests/preflight.sh tests/remote-build.sh
+    preflight.sh pwmstream-report.sh uninstall.sh README.md
+    dev-tools/deploy.sh dev-tools/test.sh dev-tools/remote-build.sh
+    tests/base.dts tests/overlay.sh tests/preflight.sh tests/report.sh
     tests/pwmstream-test.c tests/harness.sh tests/install.sh)
 if command -v shasum >/dev/null; then
     shasum -a 256 "${sources[@]}" > "$artifacts/SOURCES.sha256"
@@ -82,9 +83,9 @@ deploy() {
     done
     scp "$artifacts/SOURCES.sha256" "$host:$remote/SOURCES.sha256"
     if [[ $action == install ]]; then
-        ssh -t "$host" "cd '$remote' && bash tests/remote-build.sh '$action'"
+        ssh -t "$host" "cd '$remote' && bash dev-tools/remote-build.sh '$action'"
     else
-        ssh "$host" "cd '$remote' && bash tests/remote-build.sh '$action'"
+        ssh "$host" "cd '$remote' && bash dev-tools/remote-build.sh '$action'"
     fi
     echo "Sources and build retained: $host:$remote"
     if [[ $run_tests == 1 ]]; then

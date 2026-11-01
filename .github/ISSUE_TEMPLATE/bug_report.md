@@ -13,7 +13,7 @@ labels: bug
 
 **Driver version (release or git commit):** (please try the latest release first)
 
-**Install state:** output of `pwmstream-report` (or `sh install-state.sh` in a source checkout). It
+**Install state:** output of `pwmstream-report` (or `sh pwmstream-report.sh` in a source checkout). It
 refuses to run on an outdated release unless you add `--force`.
 
 **What you did and what you expected:**

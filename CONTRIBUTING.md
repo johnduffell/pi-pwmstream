@@ -19,7 +19,7 @@ Good ways to help:
 | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pwmstream.c`, `pwmstream.h`, `pwmstream-cli.c`, `pwmstream-overlay.dts` | The kernel module, its ABI header, the CLI and the device-tree overlay                                                                                    |
 | `packaging/`, `VERSION`                                                  | The DKMS `.deb`                                                                                                                                           |
-| `check-install.sh`, `install-state.sh`, `uninstall.sh`, `Makefile`       | Manual install, preflight and diagnostics (`pwmstream-report`)                                                                                            |
+| `preflight.sh`, `pwmstream-report.sh`, `uninstall.sh`, `Makefile`        | Manual install, preflight and diagnostics (`pwmstream-report.sh` ships as `pwmstream-report`)                                                             |
 | `dev-tools/`, `tests/`, `.devcontainer/`                                 | Development only: Pi deploy and test scripts, test suites, dev environment                                                                                |
 | `docs/`                                                                  | [User guide](docs/usage.md), [ABI reference](docs/abi.md), [development guide](docs/development.md), [design notes and hardware research](docs/design.md) |
 
@@ -64,8 +64,8 @@ Use the [issue template](../../issues/new?template=bug_report.md). Include your 
 
 ## Supporting a newer kernel
 
-If a Pi OS update brings a kernel outside it, open an
-issue with your `uname -r` output, or better still send a pull request following the steps in
+If a Pi OS update brings a kernel outside the supported range, open an issue with your `uname -r`
+output, or better still send a pull request following the steps in
 [docs/development.md](docs/development.md#extending-the-supported-kernel-range). Hardware results
 from a Pi running that kernel are the most valuable evidence.
 

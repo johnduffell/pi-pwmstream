@@ -773,7 +773,7 @@ static int ps_suspend(struct device *dev)
 static DEFINE_SIMPLE_DEV_PM_OPS(ps_pm, ps_suspend, NULL);
 
 static const struct of_device_id ps_match[] = {
-	{ .compatible = "pixel,bcm2837-pwmstream" },
+	{ .compatible = "pwmstream,bcm2837-pwmstream" },
 	{}
 };
 MODULE_DEVICE_TABLE(of, ps_match);

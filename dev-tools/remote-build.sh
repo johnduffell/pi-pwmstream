@@ -1,5 +1,7 @@
 #!/bin/bash
 # SPDX-License-Identifier: Apache-2.0
+# Runs on the Pi (copied there by deploy.sh): checks the kernel and headers, builds and tests the
+# module, and with "install" replaces the loaded module. See docs/development.md.
 set -euo pipefail
 # Non-interactive SSH sessions may omit Debian's administrative tool paths.
 export PATH="$PATH:/usr/sbin:/sbin"

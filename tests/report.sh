@@ -18,7 +18,7 @@ printf '{"message": "Not Found"}' > "$work/none.json"
 fail() { echo "FAIL: $*" >&2; exit 1; }
 run() {
 	PATH="$work/bin:$PATH" PWMSTREAM_RELEASE_URL="file://$work/${REPLY_FILE:-latest.json}" \
-		BOOT_DIR="$work" sh ./install-state.sh "$@" > "$work/out" 2> "$work/err"
+		BOOT_DIR="$work" sh ./pwmstream-report.sh "$@" > "$work/out" 2> "$work/err"
 }
 
 TEST_INSTALLED=0.1.0 run && fail "outdated install was not rejected"
