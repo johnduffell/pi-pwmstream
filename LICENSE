@@ -1,0 +1,33 @@
+Licensing for the pi-pwmstream project
+==================================
+
+Original source code, documentation, tests, and build/setup material in
+this directory are licensed under the Apache License, Version 2.0
+(Apache-2.0), except for the kernel implementation identified below.
+
+Default SPDX-License-Identifier: Apache-2.0
+
+Kernel implementation pwmstream.c is licensed, at your option, under
+either Apache-2.0 or GNU General Public License, Version 2 only:
+
+  SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-only
+
+The shared userspace API header pwmstream.h is Apache-2.0-only.
+It requires no GPL alternative or syscall exception for userspace use.
+
+Complete applicable licence texts are supplied in:
+
+  LICENSES/Apache-2.0.txt
+  LICENSES/GPL-2.0-only.txt
+
+This notice applies to this repository only, not unrelated files in a parent
+directory. Any separately identified third-party material retains its own
+terms. Generated binaries and debug artifacts are not additional source
+components covered by a new licensing declaration.
+
+The kernel module retains MODULE_LICENSE("GPL") for its GPL-compatible
+Linux integration. That metadata is not the complete source licence grant.
+The Apache option does not relicense Linux, grant rights to third-party
+code, or remove obligations applicable when distributing a kernel module
+combined with GPL kernel code. See the component notices and the relevant
+licence texts.
