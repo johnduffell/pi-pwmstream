@@ -1,0 +1,18 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0
+set -e
+case "$1" in
+remove | upgrade | deconfigure)
+	if command -v dkms >/dev/null 2>&1 && [ -n "$(dkms status -m pwmstream -v @VERSION@ 2>/dev/null)" ]; then
+		dkms remove -m pwmstream -v @VERSION@ --all
+	fi
+	if [ "$1" = remove ]; then
+		for config in /boot/firmware/config.txt /boot/config.txt; do
+			if [ -r "$config" ] && grep -Eq '^[[:space:]]*dtoverlay=pwmstream([[:space:],]|$)' "$config"; then
+				echo "pwmstream: $config still has dtoverlay=pwmstream; run 'sudo pwmstream-enable --disable' and reboot (PWM0 stays unbound until then; no hardware is driven)." >&2
+			fi
+		done
+	fi
+	;;
+esac
+exit 0

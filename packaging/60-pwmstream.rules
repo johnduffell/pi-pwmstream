@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
+# Let members of the Raspberry Pi OS "gpio" group (the default user already is one) use the driver
+# without sudo. The group already grants raw /dev/gpiomem access. Not world-writable.
+SUBSYSTEM=="misc", KERNEL=="pwmstream0", GROUP="gpio", MODE="0660"

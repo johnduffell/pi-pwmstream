@@ -1,0 +1,37 @@
+// SPDX-License-Identifier: Apache-2.0
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "raspberrypi,3-model-b-plus", "brcm,bcm2837";
+
+	fragment@0 {
+		target = <&gpio>;
+		__overlay__ {
+			pwmstream_idle: pwmstream_idle {
+				brcm,pins = <18>;
+				brcm,function = <0>; /* input */
+				brcm,pull = <1>; /* pull down, not a driven low */
+			};
+			pwmstream_active: pwmstream_active {
+				brcm,pins = <18>;
+				brcm,function = <2>; /* ALT5: PWM0 */
+				brcm,pull = <1>;
+			};
+		};
+	};
+
+	fragment@1 {
+		target = <&pwm>;
+		__overlay__ {
+			/* Replace the existing node's match, never add a second owner. */
+			compatible = "pixel,bcm2837-pwmstream";
+			pinctrl-names = "default", "active";
+			pinctrl-0 = <&pwmstream_idle>;
+			pinctrl-1 = <&pwmstream_active>;
+			dmas = <&dma 5>; /* PWM DREQ 5, NOT DMA channel 5 */
+			dma-names = "tx";
+			status = "okay";
+		};
+	};
+};

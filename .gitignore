@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: Apache-2.0
+# Generated
+*.o
+*.ko
+*.mod
+*.mod.c
+*.cmd
+*.dtbo
+Module.symvers
+modules.order
+pwmstream-cli
+pwmstream-test
+dist/
+.harness-artifacts/
+SOURCES.sha256
+BUILD.sha256
+.preflight-check/
+.harness-check-*/
+.install-check-*/
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+*.dSYM/
+
+# Private maintainer plans and handoff notes
+/plan/

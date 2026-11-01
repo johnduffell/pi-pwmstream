@@ -1,0 +1,18 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: pi-pwmstream
+Source: https://github.com/johnduffell/pi-pwmstream
+
+Files: *
+Copyright: 2026 John Duffell
+License: Apache-2.0
+
+Files: usr/src/pwmstream-*/pwmstream.c
+Copyright: 2026 John Duffell
+License: Apache-2.0 or GPL-2
+ The kernel module is dual licensed: Apache-2.0 OR GPL-2.0-only.
+
+License: Apache-2.0
+ On Debian systems the full text is in /usr/share/common-licenses/Apache-2.0.
+
+License: GPL-2
+ On Debian systems the full text is in /usr/share/common-licenses/GPL-2.
