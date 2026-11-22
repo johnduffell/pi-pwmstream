@@ -18,7 +18,7 @@ The driver repeats a user-supplied bit pattern out of one pin, with no CPU invol
 runs. The numbers in the diagram are used in the headings below:
 
 ```text
- (1) sample file -> (2) /dev/pwmstream0 -> (3) DMA buffer -> (4) DMA ring -> (5) PWM FIFO -> (6) serializer -> (7) GPIO18
+ (1) pattern file -> (2) /dev/pwmstream0 -> (3) DMA buffer -> (4) DMA ring -> (5) PWM FIFO -> (6) serializer -> (7) GPIO18
                         write()             (coherent)         (cyclic)       (DREQ-paced)     (32 bits/word)      (pin 12)
                                                                                                     ^
                                                                                               (8) PWM clock
@@ -28,7 +28,7 @@ runs. The numbers in the diagram are used in the headings below:
 
 | Block                                      | What it is                                        |
 | ------------------------------------------ | ------------------------------------------------- |
-| [1. Sample file](#1-sample-file)           | The bit pattern supplied by the user              |
+| [1. Pattern file](#1-pattern-file)         | The bit pattern supplied by the user              |
 | [2. Character device](#2-character-device) | The driver's user interface and owner of state    |
 | [3. DMA buffer](#3-dma-buffer)             | Kernel memory the DMA engine reads from           |
 | [4. DMA ring](#4-dma-ring)                 | A cyclic DMA transfer that loops over the buffer  |
@@ -38,7 +38,7 @@ runs. The numbers in the diagram are used in the headings below:
 | [8. PWM clock](#8-pwm-clock)               | Sets the bit rate                                 |
 | [9. Clock source](#9-clock-source)         | The crystal and PLL the PWM clock is divided from |
 
-The usage model is: **stop, upload a packed sample, set the bit rate, start, and repeat in hardware
+The usage model is: **stop, upload a packed pattern, set the bit rate, start, and repeat in hardware
 until stopped.** After start only hardware moves data, so nothing timing-sensitive depends on
 user-space scheduling. The sections below follow the data from the pin back to the file. Each says
 what the block is in the hardware, how Linux exposes it, and what the driver does. How the blocks
@@ -52,12 +52,12 @@ are started, stopped and monitored together is in
 **Hardware.** The Pi 3B+ uses the **Broadcom BCM2837B0** (quad Cortex-A53). It is not a Pi 4
 (BCM2711) or Pi 5 (RP1) platform, but its PWM, clock and DMA peripherals belong to the BCM2835
 family, which is why Linux drivers use `bcm2835` names ([Pi 3B+ spec], [BCM2835 manual],
-[pwm-bcm2835]). PWM0 can be routed to two pins:
+[pwm-bcm2835]). PWM channel 1 (the block's "PWM0" output) can be routed to two pins:
 
-| GPIO   | Header pin | Function   |
-| ------ | ---------- | ---------- |
-| GPIO18 | 12         | ALT5, PWM0 |
-| GPIO12 | 32         | ALT0, PWM0 |
+| GPIO   | Header pin | Function         |
+| ------ | ---------- | ---------------- |
+| GPIO18 | 12         | ALT5, PWM0 (ch1) |
+| GPIO12 | 32         | ALT0, PWM0 (ch1) |
 
 These are alternatives for the same channel, not independent streams. The onboard analogue audio
 uses both PWM channels, so audio conflicts with the driver, and ownership must cover the PWM block
@@ -88,7 +88,7 @@ what the probe checks.
 **Driver.** It uses channel 1 only, with range 32, and leaves channel 2, repeat-last, inversion and
 mark/space off.
 
-**Sample format.** The upload format is chronological bytes, most-significant bit first within each
+**Pattern format.** The upload format is chronological bytes, most-significant bit first within each
 byte. The driver converts each four-byte group to the native 32-bit word the FIFO expects; on a
 little-endian Pi, copying the bytes unchanged would reverse the order within each word.
 
@@ -129,7 +129,7 @@ preferable ([BCM2835 manual], chapter 6; [clk-bcm2835]).
 **Driver.** It requests a rate, reads back the result and reports both. It never retunes a shared
 PLL or writes clock registers, and it keeps a CCF exclusive-rate reference across rate changes. That
 protects the rate against other CCF consumers, but not against firmware or raw register users.
-Changing the rate also changes the delta-sigma oversampling ratio if the sample was generated for a
+Changing the rate also changes the delta-sigma oversampling ratio if the pattern was generated for a
 particular rate, so fidelity must be reconsidered. The valid range and rounding rules are in
 [abi.md](abi.md#errors-and-limits).
 
@@ -193,8 +193,8 @@ requested rate:
   Mbit/s, so the divider, not the ABI, sets the resolution there.
 - The clock driver picks the divisor by truncating `parent × 4096 / request`, so the actual rate is
   at or slightly above the request, within one step. It is **not** rejected for differing from the
-  request: `actual_hz` reports the result, and the driver only checks that the rounded rate is in
-  its 100 kHz to 100 MHz range (plus the 1 Hz tolerance).
+  request: `actual_bit_rate_hz` reports the result, and the driver only checks that the rounded rate
+  is in its 100 kHz to 100 MHz range (plus the 1 Hz tolerance).
 - Readback carries the parent's own rounding: the 500,000,006 Hz `plld_per` is why a 50 Mbit/s
   request reads back as 50,000,000 and 100 Mbit/s as 100,000,001 (see
   [Validation status](#validation-status)).
@@ -215,7 +215,7 @@ requested rate:
 **Hitting a requested frequency.** The loop length and the bit rate together set the waveform
 frequency: `f = cycles × bit_rate / loop_bits`, and the loop must be a multiple of 32 bits (see
 [3. DMA buffer](#3-dma-buffer)). The driver never promises the requested frequency; it reports
-`actual_hz`, and a frontend should do the same with the frequency it achieved. In order of
+`actual_bit_rate_hz`, and a frontend should do the same with the frequency it achieved. In order of
 preference:
 
 1. **Whole-bit period, trimmed clock.** Choose an integer period `N` near `bit_rate / f`, tile it to
@@ -228,8 +228,8 @@ preference:
    clock step. The cost is that cycles alternate between neighbouring whole-bit lengths, so each
    edge is placed to the nearest bit (up to one tick, 20 ns at 50 Mbit/s) and the error repeats at
    the beat rate. That adds spurs near the carrier that an output filter only partly removes.
-3. **Otherwise report the achieved frequency**, and its error, computed from `actual_hz`; a frontend
-   may refuse when the error exceeds a tolerance the user set.
+3. **Otherwise report the achieved frequency**, and its error, computed from `actual_bit_rate_hz`; a
+   frontend may refuse when the error exceeds a tolerance the user set.
 
 The buffer is rarely the limit: whole-bit periods up to about 260,000 bits tile exactly, and lower
 bit rates give finer clock steps. Fine fractions of long periods are where capacity runs out.
@@ -290,7 +290,7 @@ so there is no CPU pre-fill duplication.
 DMA-addressable, and coherent allocation does not remove every ordering requirement ([DMA API
 HOWTO]).
 
-**Driver.** Coherent sample storage is allocated on `dmaengine_get_dma_device(chan)`, not the PWM
+**Driver.** Coherent pattern storage is allocated on `dmaengine_get_dma_device(chan)`, not the PWM
 platform device, and must fit in 32 bits. The shared DMA controller's mask is not changed. Storage
 is bounded (at most 1 MiB staging plus 1 MiB coherent) because large coherent allocations can fail.
 The 1 MiB figure is an arbitrary, conservative compromise, not a hardware limit: it is far below the
@@ -318,26 +318,34 @@ race between processes, so it was not used ([sysfs docs]). The full contract is 
 **Lifecycle.**
 
 ```text
-stopped -> upload complete sample + set rate -> configured
+stopped -> upload complete pattern + set rate -> configured
 configured -> start -> running (loops until stopped)
 running -> stop -> configured
-configured -> replace sample and/or rate -> configured
+configured -> replace pattern and/or rate -> configured
 ```
 
-Sample and rate changes are rejected while running rather than modifying live DMA memory, and
+Pattern and rate changes are rejected while running rather than modifying live DMA memory, and
 seamless replacement is out of scope. The driver validates size, alignment, rate and a complete
-upload before starting, keeps the active sample immutable, and stops when the controlling file
+upload before starting, keeps the active pattern immutable, and stops when the controlling file
 descriptor closes. There is one controller at a time; other processes may observe status only.
 
 **Access.** A udev rule gives group `gpio` read/write access, so no `/dev/mem`, raw DMA access or
 `sudo` is needed. Nothing is world-writable.
+
+**Forward compatibility.** The structures are padded and validated so new features can be added
+without breaking clients ([extension rules](abi.md#sizes-and-extension-rules)). The device node
+stays `/dev/pwmstream0` with the same udev rule; a second channel would be another stream on the
+same node, not another node. The kernel module and the device-tree overlay are installed together
+but can be briefly out of step, so each must tolerate the other: a module works with an overlay that
+lacks optional pin states, and an overlay with extra states works with an older module. Anything
+optional, such as channel 2 pin states, is opt-in through a `dtoverlay=pwmstream,<param>` parameter.
 
 **Locking and lifetime.** A mutex serialises upload, ioctls, the monitor and removal. Open
 descriptors hold a reference to a non-devm state object; unbind marks it dead, stops, frees quiesced
 resources and deregisters the miscdevice, after which descriptors fail without touching freed
 resources. Module ownership blocks ordinary unload while descriptors remain.
 
-### 1. Sample file
+### 1. Pattern file
 
 A raw binary file: chronological bytes, MSB first, 4 bytes to 1 MiB and a multiple of four. The
 format and how it becomes FIFO words are in [6. Serializer](#6-serializer); the CLI usage is in
@@ -347,7 +355,7 @@ format and how it becomes FIFO words are in [6. Serializer](#6-serializer); the 
 
 **Start** brings the blocks up in this order:
 
-1. Convert the whole staged sample into the DMA buffer (3) and issue a DMA write barrier.
+1. Convert the whole staged pattern into the DMA buffer (3) and issue a DMA write barrier.
 2. Clear the FIFO (5) and configure the serializer (6) for range 32.
 3. Start the DMA ring (4) **while PWM consumption is disabled**, so it primes the FIFO.
 4. Wait up to 100 ms for the FIFO to become non-empty, or for a PWM error.
@@ -357,7 +365,7 @@ If priming fails, START times out and stops. It never enables an empty FIFO.
 
 **Stop** disables PWM consumption and DREQ, then calls `dmaengine_terminate_sync()` **before**
 clearing the FIFO or touching DMA memory, and attempts the idle pin state even if termination fails.
-If termination errors, sample memory is retained and configure/rate/start are blocked until a STOP
+If termination errors, pattern memory is retained and configure/rate/start are blocked until a STOP
 succeeds. After a failed final-close termination, new controllers get `EIO`; unbind retries and, if
 that also fails, retains the DMA allocation and channel until reboot. Cleanup failures are logged
 without overwriting the original errno in status. Shutdown stops output; suspend stops it and

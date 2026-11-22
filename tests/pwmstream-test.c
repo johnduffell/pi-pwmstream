@@ -19,10 +19,22 @@
 #include <unistd.h>
 #include "../pwmstream.h"
 
-_Static_assert(sizeof(struct pwmstream_config) == 16, "config ABI");
-_Static_assert(sizeof(struct pwmstream_rate) == 16, "rate ABI");
-_Static_assert(sizeof(struct pwmstream_status) == 64, "status ABI");
+_Static_assert(sizeof(struct pwmstream_config) == 32, "config ABI");
+_Static_assert(sizeof(struct pwmstream_start) == 16, "start ABI");
+_Static_assert(sizeof(struct pwmstream_bit_rate) == 16, "bit rate ABI");
+_Static_assert(sizeof(struct pwmstream_status) == 96, "status ABI");
+_Static_assert(offsetof(struct pwmstream_config, bit_rate_hz) == 12, "config ABI");
 _Static_assert(offsetof(struct pwmstream_status, last_error) == 24, "status ABI");
+_Static_assert(offsetof(struct pwmstream_status, channels) == 40, "status ABI");
+#ifdef __linux__
+_Static_assert(PWMSTREAM_CONFIG == 0x40205040U, "ioctl number");
+_Static_assert(PWMSTREAM_BIT_RATE == 0x40105041U, "ioctl number");
+_Static_assert(PWMSTREAM_START == 0x40105042U, "ioctl number");
+_Static_assert(PWMSTREAM_STOP == 0x00005043U, "ioctl number");
+_Static_assert(PWMSTREAM_STATUS == 0x80605044U, "ioctl number");
+#endif
+
+static const struct pwmstream_start start_args = {PWMSTREAM_ABI_VERSION, 0, {0, 0}};
 
 static const char *device = "/dev/pwmstream0";
 static int controller = -1, observer = -1;
@@ -130,6 +142,7 @@ static struct pwmstream_status status(void)
 	CHECK(ioctl(observer, PWMSTREAM_STATUS, &s) == 0);
 	CHECK(s.version == PWMSTREAM_ABI_VERSION);
 	CHECK(s.flags & PWMSTREAM_F_DMA_LIMITED);
+	CHECK(s.channels == 1);
 	for (i = 0; i < sizeof(s.reserved) / sizeof(s.reserved[0]); ++i)
 		CHECK(s.reserved[i] == 0);
 	return s;
@@ -140,8 +153,8 @@ static void print_status(struct pwmstream_status s)
 	printf("status flags=0x%" PRIx32 " upload=%" PRIu32 "/%" PRIu32
 	       " requested=%" PRIu32 " actual=%" PRIu32 " last_error=%" PRId32
 	       " pwm_errors=0x%" PRIx32 " dma=%" PRIu32 " residue=%" PRIu32 "\n",
-	       s.flags, s.uploaded_bytes, s.sample_bytes, s.requested_hz,
-	       s.actual_hz, s.last_error, s.pwm_errors, s.dma_status, s.dma_residue);
+	       s.flags, s.uploaded_bytes, s.pattern_bytes, s.requested_bit_rate_hz,
+	       s.actual_bit_rate_hz, s.last_error, s.pwm_errors, s.dma_status, s.dma_residue);
 }
 
 static void healthy(int running)
@@ -154,11 +167,11 @@ static void healthy(int running)
 	CHECK(s.flags & PWMSTREAM_F_CLOCK_READY);
 	CHECK(s.flags & PWMSTREAM_F_CONFIG_READY);
 	CHECK(s.last_error == 0 && s.pwm_errors == 0);
-	CHECK(s.actual_hz >= PWMSTREAM_MIN_HZ &&
-	      s.actual_hz <= PWMSTREAM_MAX_HZ + 1U);
+	CHECK(s.actual_bit_rate_hz >= PWMSTREAM_MIN_BIT_RATE_HZ &&
+	      s.actual_bit_rate_hz <= PWMSTREAM_MAX_BIT_RATE_HZ + 1U);
 	if (running) {
-		CHECK(s.flags & PWMSTREAM_F_COMPLETE);
-		CHECK(s.uploaded_bytes == s.sample_bytes);
+		CHECK(s.flags & PWMSTREAM_F_UPLOAD_COMPLETE);
+		CHECK(s.uploaded_bytes == s.pattern_bytes);
 		CHECK(s.dma_status == 1); /* Linux DMA_IN_PROGRESS, not edge verification. */
 	} else {
 		CHECK(s.dma_status == 0);
@@ -168,14 +181,14 @@ static void healthy(int running)
 
 static void configure(unsigned int bytes, unsigned int hz)
 {
-	struct pwmstream_config cfg = {PWMSTREAM_ABI_VERSION, bytes, hz, 0};
+	struct pwmstream_config cfg = {PWMSTREAM_ABI_VERSION, 1, bytes, hz, {0}};
 	struct pwmstream_status s;
 
 	CHECK(ioctl(controller, PWMSTREAM_CONFIG, &cfg) == 0);
 	s = status();
-	CHECK(s.sample_bytes == bytes && s.uploaded_bytes == 0);
-	CHECK(s.requested_hz == (hz ? hz : PWMSTREAM_DEFAULT_HZ));
-	CHECK(!(s.flags & PWMSTREAM_F_COMPLETE));
+	CHECK(s.pattern_bytes == bytes && s.uploaded_bytes == 0);
+	CHECK(s.requested_bit_rate_hz == (hz ? hz : PWMSTREAM_DEFAULT_BIT_RATE_HZ));
+	CHECK(!(s.flags & PWMSTREAM_F_UPLOAD_COMPLETE));
 	healthy(0);
 }
 
@@ -184,10 +197,10 @@ static void unchanged(struct pwmstream_status before)
 	struct pwmstream_status after = status();
 
 	CHECK(after.flags == before.flags);
-	CHECK(after.sample_bytes == before.sample_bytes);
+	CHECK(after.pattern_bytes == before.pattern_bytes);
 	CHECK(after.uploaded_bytes == before.uploaded_bytes);
-	CHECK(after.requested_hz == before.requested_hz);
-	CHECK(after.actual_hz == before.actual_hz);
+	CHECK(after.requested_bit_rate_hz == before.requested_bit_rate_hz);
+	CHECK(after.actual_bit_rate_hz == before.actual_bit_rate_hz);
 	CHECK(after.last_error == before.last_error);
 	CHECK(after.pwm_errors == before.pwm_errors);
 	CHECK(after.dma_status == before.dma_status);
@@ -208,7 +221,7 @@ static void wait_tick(void)
 	healthy(1);
 }
 
-static void large_sample(void)
+static void large_pattern(void)
 {
 	const size_t length = 64U * 1024U;
 	unsigned char *bytes = malloc(length);
@@ -231,22 +244,22 @@ static void large_sample(void)
 		offset += amount;
 	}
 	s = status();
-	CHECK(s.uploaded_bytes == length && (s.flags & PWMSTREAM_F_COMPLETE));
+	CHECK(s.uploaded_bytes == length && (s.flags & PWMSTREAM_F_UPLOAD_COMPLETE));
 	for (cycle = 0; cycle < 2; ++cycle) {
-		CHECK(ioctl(controller, PWMSTREAM_START) == 0);
+		CHECK(ioctl(controller, PWMSTREAM_START, &start_args) == 0);
 		/* 750 ms exceeds the 524.288 ms nominal buffer duration. */
 		for (tick = 0; tick < 3; ++tick)
 			wait_tick();
 		CHECK(ioctl(controller, PWMSTREAM_STOP) == 0);
 		healthy(0);
 	}
-	/* Replace both a completed large sample and an incomplete upload. */
+	/* Replace both a completed large pattern and an incomplete upload. */
 	configure(8, 1000000);
 	CHECK(write(controller, bytes, 3) == 3);
 	configure(4, 1000000);
-	ERROR(ioctl(controller, PWMSTREAM_START), ENODATA);
+	ERROR(ioctl(controller, PWMSTREAM_START, &start_args), ENODATA);
 	CHECK(write(controller, bytes, 4) == 4);
-	CHECK(ioctl(controller, PWMSTREAM_START) == 0);
+	CHECK(ioctl(controller, PWMSTREAM_START, &start_args) == 0);
 	wait_tick();
 	CHECK(ioctl(controller, PWMSTREAM_STOP) == 0);
 	healthy(0);
@@ -259,89 +272,116 @@ static void abi_hardware(void)
 		0xff, 0xff, 0, 0, 0xff, 0, 0, 0, 0xaa, 0xaa, 0xaa, 0xaa
 	};
 	struct pwmstream_config cfg;
-	struct pwmstream_rate rate = {PWMSTREAM_ABI_VERSION, 1000000, {0, 0}};
+	struct pwmstream_bit_rate rate = {PWMSTREAM_ABI_VERSION, 1000000, {0, 0}};
 	struct pwmstream_status before, s;
-	unsigned int invalid_sizes[] = {0, 1, 3, 5, PWMSTREAM_MAX_BYTES + 4U};
+	unsigned int invalid_sizes[] = {0, 1, 3, 5, PWMSTREAM_MAX_PATTERN_BYTES + 4U};
 	size_t i;
 	int shared;
 
 	acquire(); /* EBUSY means leave the existing owner alone and fail. */
 	ERROR(open(device, O_WRONLY | O_CLOEXEC), EBUSY);
 	ERROR(ioctl(observer, PWMSTREAM_STOP), EPERM);
-	ERROR(ioctl(observer, PWMSTREAM_START), EPERM);
+	ERROR(ioctl(observer, PWMSTREAM_START, &start_args), EPERM);
 	ERROR(ioctl(observer, PWMSTREAM_CONFIG, &rate), EPERM);
-	ERROR(ioctl(observer, PWMSTREAM_RATE, &rate), EPERM);
+	ERROR(ioctl(observer, PWMSTREAM_BIT_RATE, &rate), EPERM);
 	ERROR(ioctl(controller, _IO('P', 0x7f)), ENOTTY);
 	ERROR(lseek(controller, 0, SEEK_SET), ESPIPE);
 	ERROR(write(controller, bytes, 1), EINVAL);
-	ERROR(ioctl(controller, PWMSTREAM_START), ENODATA);
+	ERROR(ioctl(controller, PWMSTREAM_START, &start_args), ENODATA);
 	CHECK(ioctl(controller, PWMSTREAM_STOP) == 0);
 	configure(8, 0);
 	CHECK(write(controller, bytes, 1) == 1);
 	s = status();
-	CHECK(s.uploaded_bytes == 1 && !(s.flags & PWMSTREAM_F_COMPLETE));
-	ERROR(ioctl(controller, PWMSTREAM_START), ENODATA);
+	CHECK(s.uploaded_bytes == 1 && !(s.flags & PWMSTREAM_F_UPLOAD_COMPLETE));
+	ERROR(ioctl(controller, PWMSTREAM_START, &start_args), ENODATA);
 	before = status();
 	for (i = 0; i < sizeof(invalid_sizes) / sizeof(invalid_sizes[0]); ++i) {
-		cfg = (struct pwmstream_config){PWMSTREAM_ABI_VERSION, invalid_sizes[i], 0, 0};
+		cfg = (struct pwmstream_config){PWMSTREAM_ABI_VERSION, 1, invalid_sizes[i], 0, {0}};
 		ERROR(ioctl(controller, PWMSTREAM_CONFIG, &cfg), EINVAL);
 		unchanged(before);
 	}
-	cfg = (struct pwmstream_config){PWMSTREAM_ABI_VERSION + 1, 8, 0, 0};
+	cfg = (struct pwmstream_config){PWMSTREAM_ABI_VERSION + 1, 1, 8, 0, {0}};
 	ERROR(ioctl(controller, PWMSTREAM_CONFIG, &cfg), EINVAL);
 	unchanged(before);
 	cfg.version = PWMSTREAM_ABI_VERSION;
-	cfg.reserved = 1;
-	ERROR(ioctl(controller, PWMSTREAM_CONFIG, &cfg), EINVAL);
+	for (i = 0; i < 4; ++i) {
+		cfg.reserved[i] = 1;
+		ERROR(ioctl(controller, PWMSTREAM_CONFIG, &cfg), EINVAL);
+		cfg.reserved[i] = 0;
+	}
 	unchanged(before);
-	cfg.reserved = 0;
-	cfg.rate_hz = PWMSTREAM_MIN_HZ - 1U;
+	cfg.channels = 0;
+	ERROR(ioctl(controller, PWMSTREAM_CONFIG, &cfg), EINVAL);
+	cfg.channels = 2; /* channel 2 is not supported yet */
+	ERROR(ioctl(controller, PWMSTREAM_CONFIG, &cfg), EINVAL);
+	cfg.channels = 3;
+	ERROR(ioctl(controller, PWMSTREAM_CONFIG, &cfg), EINVAL);
+	cfg.channels = 1;
+	unchanged(before);
+	{
+		struct pwmstream_start start = start_args;
+
+		start.flags = 1;
+		ERROR(ioctl(controller, PWMSTREAM_START, &start), EINVAL);
+		start.flags = 0;
+		start.reserved[1] = 1;
+		ERROR(ioctl(controller, PWMSTREAM_START, &start), EINVAL);
+		start.reserved[1] = 0;
+		start.version++;
+		ERROR(ioctl(controller, PWMSTREAM_START, &start), EINVAL);
+		unchanged(before);
+	}
+	cfg.bit_rate_hz = PWMSTREAM_MIN_BIT_RATE_HZ - 1U;
 	ERROR(ioctl(controller, PWMSTREAM_CONFIG, &cfg), ERANGE);
 	unchanged(before);
-	cfg.rate_hz = PWMSTREAM_MAX_HZ + 1U;
+	cfg.bit_rate_hz = PWMSTREAM_MAX_BIT_RATE_HZ + 1U;
 	ERROR(ioctl(controller, PWMSTREAM_CONFIG, &cfg), ERANGE);
 	unchanged(before);
 	rate.version++;
-	ERROR(ioctl(controller, PWMSTREAM_RATE, &rate), EINVAL);
+	ERROR(ioctl(controller, PWMSTREAM_BIT_RATE, &rate), EINVAL);
 	rate.version = PWMSTREAM_ABI_VERSION;
 	for (i = 0; i < 2; ++i) {
 		rate.reserved[i] = 1;
-		ERROR(ioctl(controller, PWMSTREAM_RATE, &rate), EINVAL);
+		ERROR(ioctl(controller, PWMSTREAM_BIT_RATE, &rate), EINVAL);
 		rate.reserved[i] = 0;
 	}
-	rate.rate_hz = PWMSTREAM_MAX_HZ + 1U;
-	ERROR(ioctl(controller, PWMSTREAM_RATE, &rate), ERANGE);
-	rate.rate_hz = PWMSTREAM_MIN_HZ - 1U;
-	ERROR(ioctl(controller, PWMSTREAM_RATE, &rate), ERANGE);
-	rate.rate_hz = 0;
-	ERROR(ioctl(controller, PWMSTREAM_RATE, &rate), ERANGE);
+	rate.bit_rate_hz = PWMSTREAM_MAX_BIT_RATE_HZ + 1U;
+	ERROR(ioctl(controller, PWMSTREAM_BIT_RATE, &rate), ERANGE);
+	rate.bit_rate_hz = PWMSTREAM_MIN_BIT_RATE_HZ - 1U;
+	ERROR(ioctl(controller, PWMSTREAM_BIT_RATE, &rate), ERANGE);
+	rate.bit_rate_hz = 0;
+	ERROR(ioctl(controller, PWMSTREAM_BIT_RATE, &rate), ERANGE);
 	unchanged(before);
 	CHECK(write(controller, bytes + 1, 2) == 2);
 	CHECK(write(controller, bytes + 3, sizeof(bytes) - 3) == 5);
 	ERROR(write(controller, bytes, 1), ENOSPC);
 	CHECK(write(controller, bytes, 0) == 0);
 	s = status();
-	CHECK(s.uploaded_bytes == 8 && (s.flags & PWMSTREAM_F_COMPLETE));
-	rate.rate_hz = PWMSTREAM_MIN_HZ;
-	CHECK(ioctl(controller, PWMSTREAM_RATE, &rate) == 0);
+	CHECK(s.uploaded_bytes == 8 && (s.flags & PWMSTREAM_F_UPLOAD_COMPLETE));
+	rate.bit_rate_hz = PWMSTREAM_MIN_BIT_RATE_HZ;
+	CHECK(ioctl(controller, PWMSTREAM_BIT_RATE, &rate) == 0);
 	s = status();
-	CHECK(s.requested_hz == PWMSTREAM_MIN_HZ && s.uploaded_bytes == 8);
-	CHECK(s.flags & PWMSTREAM_F_COMPLETE);
+	CHECK(s.requested_bit_rate_hz == PWMSTREAM_MIN_BIT_RATE_HZ && s.uploaded_bytes == 8);
+	CHECK(s.flags & PWMSTREAM_F_UPLOAD_COMPLETE);
 	healthy(0);
-	rate.rate_hz = 1000000;
-	CHECK(ioctl(controller, PWMSTREAM_RATE, &rate) == 0);
+	rate.bit_rate_hz = 1000000;
+	CHECK(ioctl(controller, PWMSTREAM_BIT_RATE, &rate) == 0);
 	s = status();
-	CHECK(s.requested_hz == 1000000 && s.uploaded_bytes == 8);
+	CHECK(s.requested_bit_rate_hz == 1000000 && s.uploaded_bytes == 8);
 	healthy(0);
+	cfg.bit_rate_hz = 0; /* 0 keeps the current bit rate */
+	CHECK(ioctl(controller, PWMSTREAM_CONFIG, &cfg) == 0);
+	CHECK(status().requested_bit_rate_hz == 1000000);
+	CHECK(write(controller, bytes, 8) == 8);
+	s = status();
 	before = s;
-	cfg.rate_hz = PWMSTREAM_MAX_HZ + 1U;
 	ERROR(ioctl(controller, PWMSTREAM_CONFIG, &cfg), ERANGE);
 	unchanged(before);
-	CHECK(ioctl(controller, PWMSTREAM_START) == 0);
+	CHECK(ioctl(controller, PWMSTREAM_START, &start_args) == 0);
 	wait_tick();
-	ERROR(ioctl(controller, PWMSTREAM_START), EBUSY);
+	ERROR(ioctl(controller, PWMSTREAM_START, &start_args), EBUSY);
 	ERROR(ioctl(controller, PWMSTREAM_CONFIG, &cfg), EBUSY);
-	ERROR(ioctl(controller, PWMSTREAM_RATE, &rate), EBUSY);
+	ERROR(ioctl(controller, PWMSTREAM_BIT_RATE, &rate), EBUSY);
 	ERROR(write(controller, bytes, 1), EBUSY);
 	ERROR(ioctl(controller, _IO('P', 0x7f)), EBUSY);
 	ERROR(ioctl(observer, PWMSTREAM_STOP), EPERM);
@@ -349,29 +389,29 @@ static void abi_hardware(void)
 	CHECK(ioctl(controller, PWMSTREAM_STOP) == 0);
 	CHECK(ioctl(controller, PWMSTREAM_STOP) == 0);
 	healthy(0);
-	CHECK(ioctl(controller, PWMSTREAM_START) == 0);
+	CHECK(ioctl(controller, PWMSTREAM_START, &start_args) == 0);
 	wait_tick();
 	/* The final descriptor, not each dup close, owns playback lifetime. */
 	CHECK((shared = dup(controller)) >= 0);
 	CHECK(close(controller) == 0);
 	controller = shared;
 	healthy(1);
-	CHECK(close(controller) == 0); /* Final close must stop and free sample. */
+	CHECK(close(controller) == 0); /* Final close must stop and free pattern. */
 	controller = -1;
 	s = status();
 	CHECK(!(s.flags & (PWMSTREAM_F_RUNNING | PWMSTREAM_F_CONTROLLER |
-			  PWMSTREAM_F_COMPLETE | PWMSTREAM_F_CONFIG_READY)));
-	CHECK(s.sample_bytes == 0 && s.uploaded_bytes == 0);
+			  PWMSTREAM_F_UPLOAD_COMPLETE | PWMSTREAM_F_CONFIG_READY)));
+	CHECK(s.pattern_bytes == 0 && s.uploaded_bytes == 0);
 	CHECK(s.dma_status == 0 && s.dma_residue == 0);
 	acquire();
-	ERROR(ioctl(controller, PWMSTREAM_START), ENODATA);
+	ERROR(ioctl(controller, PWMSTREAM_START, &start_args), ENODATA);
 	configure(4, 0);
 	CHECK(write(controller, bytes, 4) == 4);
-	CHECK(ioctl(controller, PWMSTREAM_START) == 0);
+	CHECK(ioctl(controller, PWMSTREAM_START, &start_args) == 0);
 	wait_tick();
 	CHECK(ioctl(controller, PWMSTREAM_STOP) == 0);
 	healthy(0);
-	/* Fork without a controller so only child exit can release its sample. */
+	/* Fork without a controller so only child exit can release its pattern. */
 	CHECK(close(controller) == 0);
 	controller = -1;
 	{
@@ -383,7 +423,7 @@ static void abi_hardware(void)
 			acquire();
 			configure(4, 1000000);
 			CHECK(write(controller, bytes, 4) == 4);
-			CHECK(ioctl(controller, PWMSTREAM_START) == 0);
+			CHECK(ioctl(controller, PWMSTREAM_START, &start_args) == 0);
 			wait_tick();
 			_exit(0);
 		}
@@ -395,17 +435,17 @@ static void abi_hardware(void)
 	}
 	s = status();
 	CHECK(!(s.flags & (PWMSTREAM_F_RUNNING | PWMSTREAM_F_CONTROLLER |
-			  PWMSTREAM_F_COMPLETE | PWMSTREAM_F_CONFIG_READY)));
-	CHECK(s.sample_bytes == 0 && s.uploaded_bytes == 0);
+			  PWMSTREAM_F_UPLOAD_COMPLETE | PWMSTREAM_F_CONFIG_READY)));
+	CHECK(s.pattern_bytes == 0 && s.uploaded_bytes == 0);
 	CHECK(s.dma_status == 0 && s.dma_residue == 0);
 	acquire();
 	configure(4, 1000000);
 	CHECK(write(controller, bytes, 4) == 4);
-	CHECK(ioctl(controller, PWMSTREAM_START) == 0);
+	CHECK(ioctl(controller, PWMSTREAM_START, &start_args) == 0);
 	wait_tick();
 	CHECK(ioctl(controller, PWMSTREAM_STOP) == 0);
 	healthy(0);
-	large_sample();
+	large_pattern();
 }
 
 static void enter(const char *prompt, int running)
@@ -439,10 +479,10 @@ static void scope_case(const unsigned char *bytes, unsigned int length,
 	CHECK(write(controller, bytes, length) == (ssize_t)length);
 	s = status();
 	printf("\nSCOPE: %s\n", description);
-	printf("Clock readback tick %.6f ns; whole sample %.6f us. Not a measurement.\n",
-	       1e9 / s.actual_hz, length * 8e6 / s.actual_hz);
+	printf("Clock readback tick %.6f ns; whole pattern %.6f us. Not a measurement.\n",
+	       1e9 / s.actual_bit_rate_hz, length * 8e6 / s.actual_bit_rate_hz);
 	enter("Arm capture if needed. Enter STARTS output; Ctrl-C aborts.", 0);
-	CHECK(ioctl(controller, PWMSTREAM_START) == 0);
+	CHECK(ioctl(controller, PWMSTREAM_START, &start_args) == 0);
 	enter("Observe/record timing, bit order and wrap. Enter acknowledges observation and STOPS; Ctrl-C fails.", 1);
 	CHECK(ioctl(controller, PWMSTREAM_STOP) == 0);
 	healthy(0);
@@ -459,12 +499,12 @@ static void scope(int extended)
 	acquire();
 	scope_case(square, sizeof(square), 1000000,
 		   "FFFF0000 @ 1 Mbit/s: 16 us high / 16 us low; 31.25 kHz.");
-	scope_case(square, sizeof(square), PWMSTREAM_DEFAULT_HZ,
+	scope_case(square, sizeof(square), PWMSTREAM_DEFAULT_BIT_RATE_HZ,
 		   "FFFF0000 @ 50 Mbit/s: 320 ns high / 320 ns low; 1.5625 MHz.");
 	scope_case(asymmetric, sizeof(asymmetric), 1000000,
 		   "FFFF0000 FF000000 @ 1 Mbit/s: 16H/16L/8H/24L us; 64 us wrap.");
 	if (extended)
-		scope_case(alternating, sizeof(alternating), PWMSTREAM_MAX_HZ,
+		scope_case(alternating, sizeof(alternating), PWMSTREAM_MAX_BIT_RATE_HZ,
 			   "EXPERIMENTAL AAAAAAAA @ 100 Mbit/s: 10 ns high/low; nominal 50 MHz.");
 }
 
@@ -486,33 +526,33 @@ static void lifecycle(void)
 	acquire();
 	configure(4, 1000000);
 	CHECK(write(controller, bytes, sizeof(bytes)) == (ssize_t)sizeof(bytes));
-	CHECK(ioctl(controller, PWMSTREAM_START) == 0);
+	CHECK(ioctl(controller, PWMSTREAM_START, &start_args) == 0);
 	wait_tick();
 	/* Set before writing so interrupted unbind still attempts recovery. */
 	needs_rebind = 1;
 	CHECK(binding(0) == 0);
 	ERROR(ioctl(observer, PWMSTREAM_STATUS, &s), ENODEV);
 	ERROR(ioctl(controller, PWMSTREAM_STOP), ENODEV);
-	ERROR(ioctl(controller, PWMSTREAM_START), ENODEV);
+	ERROR(ioctl(controller, PWMSTREAM_START, &start_args), ENODEV);
 	ERROR(write(controller, bytes, sizeof(bytes)), ENODEV);
 	CHECK(binding(1) == 0);
 	needs_rebind = 0;
 	/* A new binding must not revive descriptors belonging to the old one. */
 	ERROR(ioctl(observer, PWMSTREAM_STATUS, &s), ENODEV);
-	ERROR(ioctl(controller, PWMSTREAM_START), ENODEV);
+	ERROR(ioctl(controller, PWMSTREAM_START, &start_args), ENODEV);
 	old_observer = observer;
 	old_controller = controller;
 	CHECK((observer = open(device, O_RDONLY | O_CLOEXEC)) >= 0);
 	acquire();
 	s = status();
-	CHECK(s.sample_bytes == 0 && s.uploaded_bytes == 0);
-	CHECK(!(s.flags & (PWMSTREAM_F_RUNNING | PWMSTREAM_F_COMPLETE |
+	CHECK(s.pattern_bytes == 0 && s.uploaded_bytes == 0);
+	CHECK(!(s.flags & (PWMSTREAM_F_RUNNING | PWMSTREAM_F_UPLOAD_COMPLETE |
 			  PWMSTREAM_F_CONFIG_READY)));
-	ERROR(ioctl(controller, PWMSTREAM_START), ENODATA);
+	ERROR(ioctl(controller, PWMSTREAM_START, &start_args), ENODATA);
 	/* Closing stale descriptors must not stop the new controller. */
 	configure(4, 1000000);
 	CHECK(write(controller, bytes, sizeof(bytes)) == (ssize_t)sizeof(bytes));
-	CHECK(ioctl(controller, PWMSTREAM_START) == 0);
+	CHECK(ioctl(controller, PWMSTREAM_START, &start_args) == 0);
 	CHECK(close(old_controller) == 0);
 	CHECK(close(old_observer) == 0);
 	wait_tick();
@@ -551,15 +591,17 @@ int main(int argc, char **argv)
 		return 2;
 	}
 	if (selftest) {
-		CHECK(PWMSTREAM_DEFAULT_HZ == 50000000U);
-		CHECK(PWMSTREAM_MAX_HZ == 100000000U);
+		CHECK(PWMSTREAM_DEFAULT_BIT_RATE_HZ == 50000000U);
+		CHECK(PWMSTREAM_MAX_BIT_RATE_HZ == 100000000U);
 #ifdef __linux__
 		CHECK(_IOC_SIZE(PWMSTREAM_CONFIG) == sizeof(struct pwmstream_config));
-		CHECK(_IOC_SIZE(PWMSTREAM_RATE) == sizeof(struct pwmstream_rate));
+		CHECK(_IOC_SIZE(PWMSTREAM_BIT_RATE) == sizeof(struct pwmstream_bit_rate));
+		CHECK(_IOC_SIZE(PWMSTREAM_START) == sizeof(struct pwmstream_start));
 		CHECK(_IOC_SIZE(PWMSTREAM_STATUS) == sizeof(struct pwmstream_status));
 #else
 		CHECK(IOCPARM_LEN(PWMSTREAM_CONFIG) == sizeof(struct pwmstream_config));
-		CHECK(IOCPARM_LEN(PWMSTREAM_RATE) == sizeof(struct pwmstream_rate));
+		CHECK(IOCPARM_LEN(PWMSTREAM_BIT_RATE) == sizeof(struct pwmstream_bit_rate));
+		CHECK(IOCPARM_LEN(PWMSTREAM_START) == sizeof(struct pwmstream_start));
 		CHECK(IOCPARM_LEN(PWMSTREAM_STATUS) == sizeof(struct pwmstream_status));
 #endif
 		puts("PASS: native ABI layout/encoding/constants only; no device opened.");

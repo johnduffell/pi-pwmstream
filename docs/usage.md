@@ -8,9 +8,10 @@ the [README](https://github.com/johnduffell/pi-pwmstream/blob/main/README.md). D
 Programmers writing their own client: see the
 [ABI reference](https://github.com/johnduffell/pi-pwmstream/blob/main/docs/abi.md).
 
-The driver streams a packed bit pattern out of **GPIO18 (header pin 12)** using PWM0 and a
-kernel-allocated DMA channel, repeating it until stopped. It needs exclusive use of PWM0, GPIO18 and
-one DMA channel. It is experimental: see the warning in the README before connecting anything.
+The driver streams a packed bit pattern out of **GPIO18 (header pin 12)** using the PWM block
+(channel 1) and a kernel-allocated DMA channel, repeating it until stopped. It needs exclusive use
+of the PWM block, GPIO18 and one DMA channel. It is experimental: see the warning in the README
+before connecting anything.
 
 ## Compatibility policy
 
@@ -47,8 +48,11 @@ The install and enable commands are in the README quickstart. In more detail:
 
 - Installing the package builds the module through DKMS but enables nothing.
 - `pwmstream-enable` is the only step that edits `config.txt` (a backup is kept). It refuses to
-  continue if audio, `dtoverlay=pwm`, `audremap` or I2S would conflict with PWM0/GPIO18. `--dry-run`
-  previews; `--disable` plus a reboot reverses it.
+  continue if audio, `dtoverlay=pwm`, `audremap` or I2S would conflict with the PWM block or GPIO18,
+  unless you pass `--replace-pwm`, which comments those lines out with a marker. `--dry-run`
+  previews; `--disable` plus a reboot reverses it, and `--disable --restore` also uncomments the
+  lines `--replace-pwm` disabled. Only lines directly in `config.txt` are handled, not included
+  files or model sections.
 - Before enabling, stop anything else that touches the pin or PWM block: pigpio, rpi_ws281x, the old
   PWM overlay, and any `/dev/mem` or `/dev/gpiomem` user. Linux cannot stop raw register access.
 
@@ -86,23 +90,23 @@ root-only (`0600`): use `sudo`, or copy `packaging/60-pwmstream.rules` to `/etc/
 ## Using the CLI
 
 ```sh
-pwmstream-cli run sample.bin                 # default 50 Mbit/s
-pwmstream-cli run sample.bin 25000000        # bit/s
+pwmstream-cli run pattern.bin                 # default 50 Mbit/s
+pwmstream-cli run pattern.bin 25000000        # bit/s
 pwmstream-cli status                         # read-only observer
 ```
 
-`run` uploads the sample, starts output and **keeps the controlling descriptor open**. Ctrl-C,
+`run` uploads the pattern, starts output and **keeps the controlling descriptor open**. Ctrl-C,
 SIGTERM, SIGHUP, `quit` or process exit stops output. There is deliberately no start-and-exit
-command. While `run` is active, type these on its stdin: `status`, `stop`, `rate 25000000`, `start`,
-`quit` (stop before changing the rate). A fault seen by the periodic status check ends `run` with
-failure; start a new `run` after fixing the cause. `-d DEVICE` overrides the device path.
+command. While `run` is active, type these on its stdin: `status`, `stop`, `bitrate 25000000`,
+`start`, `quit` (stop before changing the bit rate). A fault seen by the periodic status check ends
+`run` with failure; start a new `run` after fixing the cause. `-d DEVICE` overrides the device path.
 
-**Sample files** contain chronological bytes, MSB first within each byte, 4 to 1,048,576 bytes and a
-multiple of four. `12 34 56 78` is the word `0x12345678`, bit 31 first. `AA AA AA AA` is an
+**Pattern files** contain chronological bytes, MSB first within each byte, 4 to 1,048,576 bytes and
+a multiple of four. `12 34 56 78` is the word `0x12345678`, bit 31 first. `AA AA AA AA` is an
 alternating pattern; `FF FF 00 00` is 16 ticks high then 16 low. The pattern repeats without
 padding. Do not pre-reverse bytes.
 
-**Rates** are 0.1 to 100 Mbit/s, default 50. Rates above 50 are experimental. The achieved rate
+**Bit rates** are 0.1 to 100 Mbit/s, default 50. Rates above 50 are experimental. The achieved rate
 comes from the clock framework and may be rounded; `status` shows both requested and actual (the
 [ABI reference](https://github.com/johnduffell/pi-pwmstream/blob/main/docs/abi.md#errors-and-limits)
 has the exact limits). Tick spacing is only guaranteed uniform at integer-derived rates, so check
@@ -125,7 +129,7 @@ unload).
 
 `apt remove` while the overlay is still enabled keeps the overlay and warns, so run
 `sudo pwmstream-enable --disable` and reboot first. Audio and PWM overlays are not restored
-automatically; decide ownership for the next use yourself.
+automatically; add `--restore` to that command to uncomment lines that `--replace-pwm` disabled.
 
 Manual installs: `sh uninstall.sh` previews, `sudo make uninstall` removes the module, CLI and
 overlay for the running kernel (it refuses while the module is loaded or the overlay is active).
@@ -135,7 +139,7 @@ Remove the `dtoverlay=pwmstream` line and reboot first. It does not touch DKMS o
 
 - Stopped, the pin is an **input with pull-down** (high impedance, not a driven-low interlock);
   running, it is ALT5.
-- STOP and the final close are abrupt, not at a word or sample boundary. Shutdown stops output;
+- STOP and the final close are abrupt, not at a word or pattern boundary. Shutdown stops output;
   suspend stops it and latches `EHOSTDOWN` (no automatic restart).
 - Faults are checked roughly every 20 ms and stop output, but this is **not bounded-latency fault
   containment**: a bad waveform may already have been emitted.

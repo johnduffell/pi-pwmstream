@@ -2,29 +2,45 @@
 # SPDX-License-Identifier: Apache-2.0
 # pwmstream-enable: the one step that turns the driver on. Adds dtoverlay=pwmstream to config.txt
 # and installs the overlay (installed as /usr/sbin/pwmstream-enable).
-# When to use: once after installing the package, then reboot; --dry-run previews and --disable
-# reverses it. Never reboots, loads the module or touches hardware: it edits config.txt only after
-# the read-only ownership preflight passes, and keeps a timestamped backup.
+# When to use: once after installing the package, then reboot. --replace-pwm first comments out
+# conflicting audio/PWM/I2S lines (marked so --disable --restore can bring them back), which is how
+# to switch between pwmstream and the standard PWM driver. --dry-run previews. Never reboots, loads
+# the module or touches hardware: it edits config.txt only after the read-only ownership preflight
+# passes, and keeps a timestamped backup.
 set -eu
 libdir=${PWMSTREAM_LIBDIR:-/usr/lib/pwmstream}
 sharedir=${PWMSTREAM_SHAREDIR:-/usr/share/pwmstream}
 modinfo_cmd=${PWMSTREAM_MODINFO:-modinfo}
 
 usage() {
-	echo "Usage: pwmstream-enable [--dry-run] [--disable]" >&2
-	echo "  (default) run the ownership preflight, install the overlay and add dtoverlay=pwmstream" >&2
-	echo "  --disable comment out dtoverlay=pwmstream (reboot afterwards)" >&2
+	echo "Usage: pwmstream-enable [--dry-run] [--replace-pwm]" >&2
+	echo "       pwmstream-enable [--dry-run] --disable [--restore]" >&2
+	echo "       pwmstream-enable --list-backups" >&2
+	echo "  (default)      run the ownership preflight, install the overlay and add dtoverlay=pwmstream" >&2
+	echo "  --replace-pwm  first comment out conflicting audio/PWM/I2S lines, marked for --restore" >&2
+	echo "  --disable      comment out dtoverlay=pwmstream (reboot afterwards)" >&2
+	echo "  --restore      with --disable: also uncomment the lines --replace-pwm commented out" >&2
+	echo "  --list-backups list the config.txt backups made by this tool" >&2
 	exit 2
 }
 dry=0
 disable=0
+replace=0
+restore=0
+list=0
 for arg in "$@"; do
 	case "$arg" in
 		--dry-run) dry=1 ;;
 		--disable) disable=1 ;;
+		--replace-pwm) replace=1 ;;
+		--restore) restore=1 ;;
+		--list-backups) list=1 ;;
 		*) usage ;;
 	esac
 done
+[ "$restore" -eq 0 ] || [ "$disable" -eq 1 ] || usage
+[ "$replace" -eq 0 ] || [ "$disable" -eq 0 ] || usage
+[ "$list" -eq 0 ] || [ $((dry + disable + replace + restore)) -eq 0 ] || usage
 
 boot=${PWMSTREAM_BOOT_DIR:-}
 if [ -z "$boot" ]; then
@@ -33,28 +49,55 @@ fi
 config=$boot/config.txt
 overlays=$boot/overlays
 [ -f "$config" ] || { echo "No $config; set PWMSTREAM_BOOT_DIR to the firmware directory." >&2; exit 1; }
+if [ "$list" -eq 1 ]; then
+	ls -1 "$config".pwmstream-*.bak 2>/dev/null || echo "No backups next to $config."
+	exit 0
+fi
 
+# Lines that use the PWM block or GPIO18. --replace-pwm appends $marker so --restore can find them again.
+conflict_re='^([[:space:]]*)(dtparam=audio=(on|1)\b|dtoverlay=(pwm|pwm-2chan|audremap|i2s-[a-z-]+)(,|[[:space:]]|$))(.*)$'
+marker=' # pwmstream-enable: replaced'
+tmp=
+trap 'rm -f "$tmp"' EXIT
 active() { grep -Eq "^[[:space:]]*dtoverlay=pwmstream([[:space:],]|\$)" "$config"; }
 do_or_say() {
 	if [ "$dry" -eq 1 ]; then echo "[dry-run] $*"; else "$@"; fi
 }
+backed_up=0
 backup() {
+	[ "$backed_up" -eq 0 ] || return 0
+	backed_up=1
 	stamp=$(date -u +%Y%m%dT%H%M%SZ)
 	do_or_say cp -p "$config" "$config.pwmstream-$stamp.bak"
 	echo "Backup: $config.pwmstream-$stamp.bak"
 }
+# edit_config SED_EXPRESSION: rewrites config.txt in place (keeping its ownership and mode).
+edit_config() {
+	[ "$dry" -eq 0 ] || return 0
+	tmp=$(mktemp)
+	sed -E "$1" "$config" > "$tmp"
+	cat "$tmp" > "$config"
+}
 [ "$dry" -eq 1 ] || [ -w "$config" ] || { echo "Cannot write $config (run with sudo)." >&2; exit 1; }
 
 if [ "$disable" -eq 1 ]; then
-	active || { echo "dtoverlay=pwmstream is not active in $config; nothing to do."; exit 0; }
-	backup
-	if [ "$dry" -eq 0 ]; then
-		tmp=$(mktemp)
-		trap 'rm -f "$tmp"' EXIT
-		sed -E 's/^([[:space:]]*)dtoverlay=pwmstream(([[:space:],].*)?)$/#\1dtoverlay=pwmstream\2 # disabled by pwmstream-enable/' "$config" > "$tmp"
-		cat "$tmp" > "$config"
+	pending=$(grep -cF "$marker" "$config" || true)
+	if ! active && { [ "$restore" -eq 0 ] || [ "$pending" -eq 0 ]; }; then
+		echo "dtoverlay=pwmstream is not active in $config; nothing to do."
+		[ "$pending" -eq 0 ] || echo "$pending line(s) commented out by --replace-pwm remain; use --disable --restore."
+		exit 0
 	fi
-	echo "Disabled. Reboot to release PWM0/GPIO18; included files and model sections are not edited."
+	backup
+	if active; then
+		edit_config 's/^([[:space:]]*)dtoverlay=pwmstream(([[:space:],].*)?)$/#\1dtoverlay=pwmstream\2 # disabled by pwmstream-enable/'
+	fi
+	if [ "$restore" -eq 1 ] && [ "$pending" -gt 0 ]; then
+		edit_config "s/^#(.*)${marker}\$/\\1/"
+		echo "Restored $pending line(s) commented out by --replace-pwm."
+	elif [ "$pending" -gt 0 ]; then
+		echo "$pending line(s) commented out by --replace-pwm stay disabled; add --restore to bring them back."
+	fi
+	echo "Disabled. Reboot to release the PWM block and GPIO18; included files and model sections are not edited."
 	exit 0
 fi
 
@@ -62,15 +105,27 @@ if ! "$modinfo_cmd" -n pwmstream >/dev/null 2>&1; then
 	echo "No pwmstream module for kernel $(uname -r). Check: dkms status; the kernel must be 6.18.N+rpt-rpi-v8 (N>=50) with headers installed." >&2
 	exit 1
 fi
-"$libdir/preflight" --no-headers
-bad=$(grep -En '^[[:space:]]*(dtparam=audio=(on|1)\b|dtoverlay=(pwm|pwm-2chan|audremap|i2s-[a-z-]+)(,|[[:space:]]|$))' "$config" || true)
+bad=$(grep -En "$conflict_re" "$config" || true)
+preflight_args=--no-headers
 if [ -n "$bad" ]; then
-	echo "These lines in $config conflict with PWM0/GPIO18; disable them first:" >&2
-	echo "$bad" >&2
-	exit 1
+	if [ "$replace" -eq 0 ]; then
+		echo "These lines in $config conflict with the PWM block or GPIO18; disable them first, or rerun with" >&2
+		echo "--replace-pwm to comment them out (undo later with: pwmstream-enable --disable --restore):" >&2
+		echo "$bad" >&2
+		exit 1
+	fi
+	preflight_args="--no-headers --pending-reboot"
 fi
+# shellcheck disable=SC2086
+"$libdir/preflight" $preflight_args
 [ -d "$overlays" ] || { echo "No $overlays directory." >&2; exit 1; }
 do_or_say install -m 0644 "$sharedir/pwmstream.dtbo" "$overlays/pwmstream.dtbo"
+if [ -n "$bad" ]; then
+	backup
+	echo "Commenting out lines that conflict with the PWM block or GPIO18:"
+	echo "$bad"
+	edit_config "s/${conflict_re}/#\\1\\2\\6${marker}/"
+fi
 if active; then
 	echo "dtoverlay=pwmstream is already active in $config."
 else

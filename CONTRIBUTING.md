@@ -50,7 +50,7 @@ Pi-side tests are manual: see [Testing on a Pi](docs/development.md#testing-on-a
 
 ## Ground rules
 
-- **Hardware safety.** The driver drives GPIO18 directly and owns PWM0 and its DMA channel. Never
+- **Hardware safety.** The driver drives GPIO18 directly and owns the PWM block and its DMA channel. Never
   test with an electrically unsafe load attached, never stop other PWM/DMA users by guessing, and
   don't relax the kernel-release or ownership guards without a reviewed justification. Installation
   never edits boot settings silently. Don't describe smoke tests as full qualification.

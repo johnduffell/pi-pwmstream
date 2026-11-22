@@ -4,18 +4,37 @@
 # binding, DMA controller, audio and raw-memory users).
 # When to use: run by `make preflight` and `make install` for a manual install, and shipped as
 # /usr/lib/pwmstream/preflight for pwmstream-enable. Options: --build-only (headers and kernel
-# only), --no-headers.
+# only), --no-headers, --pending-reboot (pwmstream-enable --replace-pwm: the standard PWM driver
+# and analogue audio now active are warnings, as the reboot removes them).
 # Safety: read-only. No unbinding, clock changes or hardware commands.
 set -eu
 fail=0
 error() { printf 'ERROR: %s\n' "$*" >&2; fail=1; }
 warn() { printf 'WARNING: %s\n' "$*" >&2; }
-case "${1:-}" in
-	"") build_only=0; no_headers=0 ;;
-	--build-only) build_only=1; no_headers=0 ;;
-	--no-headers) build_only=0; no_headers=1 ;;
-	*) echo "Usage: $0 [--build-only|--no-headers]" >&2; exit 2 ;;
-esac
+build_only=0
+no_headers=0
+pending_reboot=0
+for arg in "$@"; do
+	case "$arg" in
+		--build-only) build_only=1 ;;
+		--no-headers) no_headers=1 ;;
+		--pending-reboot) pending_reboot=1 ;;
+		*) build_only=2 ;;
+	esac
+done
+if [ "$build_only" -eq 2 ] || { [ "$build_only" -eq 1 ] && [ "$no_headers" -eq 1 ]; }; then
+	echo "Usage: $0 [--build-only | --no-headers] [--pending-reboot]" >&2
+	exit 2
+fi
+# With --pending-reboot the boot configuration is being changed, so the standard PWM driver and
+# analogue audio that are active now are expected to go away on the reboot.
+stale() {
+	if [ "$pending_reboot" -eq 1 ]; then
+		warn "$* (expected to clear on reboot)"
+	else
+		error "$*"
+	fi
+}
 
 if [ "$(uname -s)" != Linux ]; then
 	echo "Installation is supported only on the target Raspberry Pi Linux." >&2
@@ -66,13 +85,13 @@ if [ "$build_only" -eq 1 ]; then
 fi
 for driver in /sys/bus/platform/drivers/bcm2835-pwm/*pwm*; do
 	[ -L "$driver" ] || continue
-	error "Standard PWM driver still owns $driver; remove its overlay and reboot first."
+	stale "Standard PWM driver still owns $driver; remove its overlay and reboot first."
 done
 pwm=/sys/bus/platform/devices/3f20c000.pwm
 if [ -L "$pwm/driver" ]; then
 	owner=$(basename "$(readlink "$pwm/driver")")
 	case "$owner" in
-		bcm2835-pwm) error "Standard PWM driver owns $pwm; remove its overlay and reboot first." ;;
+		bcm2835-pwm) stale "Standard PWM driver owns $pwm; remove its overlay and reboot first." ;;
 		pwmstream) ;;
 		*) error "Unexpected PWM owner: $owner at $pwm; investigate." ;;
 	esac
@@ -90,9 +109,9 @@ if [ -d /sys/module/snd_bcm2835 ]; then
 	# A loaded module alone is harmless; analogue (PWM) audio output is not.
 	headphones=$(cat /sys/module/snd_bcm2835/parameters/enable_headphones 2>/dev/null || echo unknown)
 	if [ "$headphones" != N ]; then
-		error "snd_bcm2835 is loaded with enable_headphones=$headphones; disable onboard analogue audio (dtparam=audio=off) and reboot."
+		stale "snd_bcm2835 is loaded with enable_headphones=$headphones; disable onboard analogue audio (dtparam=audio=off) and reboot."
 	elif grep -qi headphones /proc/asound/cards 2>/dev/null; then
-		error "An analogue Headphones sound card is registered; disable onboard analogue audio and reboot."
+		stale "An analogue Headphones sound card is registered; disable onboard analogue audio and reboot."
 	else
 		warn "snd_bcm2835 is loaded but analogue headphones are disabled and no such card exists; not treated as PWM ownership."
 	fi

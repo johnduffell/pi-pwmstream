@@ -119,12 +119,46 @@ ok
 grep -q '^dtoverlay=pwmstream' "$fake/config.txt" && fail "disable left the overlay active"
 grep -q 'dtoverlay=vc4-kms-v3d' "$fake/config.txt" || fail "disable damaged other lines"
 ok
+# An existing dtoverlay=pwmstream,<params> line is kept as is and then removed by --disable.
+printf 'dtoverlay=pwmstream,future_param=1\n' > "$fake/config.txt"
+"$enable" >/dev/null
+[ "$(grep -c '^dtoverlay=pwmstream' "$fake/config.txt")" -eq 1 ] || fail "enable duplicated a parameterised overlay"
+grep -q '^dtoverlay=pwmstream,future_param=1$' "$fake/config.txt" || fail "enable altered overlay parameters"
+"$enable" --disable >/dev/null
+grep -q '^dtoverlay=pwmstream' "$fake/config.txt" && fail "disable left a parameterised overlay active"
+ok
 for bad in 'dtparam=audio=on' 'dtoverlay=pwm,pin=18' 'dtoverlay=audremap'; do
 	printf 'dtparam=audio=off\n%s\n' "$bad" > "$fake/config.txt"
 	if "$enable" >/dev/null 2>&1; then fail "enable accepted conflicting $bad"; fi
 	grep -q '^dtoverlay=pwmstream' "$fake/config.txt" && fail "enable edited config despite $bad"
 	ok
 done
+
+# --replace-pwm comments out only the conflicting lines, --disable --restore brings them back.
+printf 'dtparam=audio=on\n  dtoverlay=pwm,pin=18\ndtoverlay=vc4-kms-v3d\ndtoverlay=audremap # keep\n' > "$fake/config.txt"
+cp "$fake/config.txt" "$work/config.orig"
+"$enable" --dry-run --replace-pwm >/dev/null
+cmp -s "$fake/config.txt" "$work/config.orig" || fail "dry-run --replace-pwm changed config.txt"
+"$enable" --replace-pwm >/dev/null
+[ "$(grep -c 'pwmstream-enable: replaced$' "$fake/config.txt")" -eq 3 ] || fail "--replace-pwm did not mark the conflicts"
+grep -q '^dtoverlay=vc4-kms-v3d$' "$fake/config.txt" || fail "--replace-pwm damaged other lines"
+grep -q '^dtoverlay=pwmstream$' "$fake/config.txt" || fail "--replace-pwm did not add the overlay"
+if grep -Eq '^[[:space:]]*(dtparam=audio=on|dtoverlay=(pwm|audremap)([,[:space:]]|$))' "$fake/config.txt"; then fail "conflicts still active"; fi
+ok
+"$enable" --disable >/dev/null
+grep -q '^dtoverlay=pwmstream' "$fake/config.txt" && fail "disable left the overlay active"
+grep -q '^#dtparam=audio=on pwmstream-enable' "$fake/config.txt" && fail "plain --disable restored lines"
+[ "$(grep -c 'pwmstream-enable: replaced$' "$fake/config.txt")" -eq 3 ] || fail "plain --disable touched the marked lines"
+"$enable" --disable --restore >/dev/null
+for line in 'dtparam=audio=on' '  dtoverlay=pwm,pin=18' 'dtoverlay=audremap # keep'; do
+	grep -qxF "$line" "$fake/config.txt" || fail "--restore lost: $line"
+done
+grep -q 'pwmstream-enable: replaced$' "$fake/config.txt" && fail "--restore left a marker"
+ok
+"$enable" --list-backups | grep -q 'config.txt.pwmstream-.*\.bak' || fail "--list-backups shows nothing"
+if "$enable" --restore >/dev/null 2>&1; then fail "--restore accepted without --disable"; fi
+if "$enable" --disable --replace-pwm >/dev/null 2>&1; then fail "--disable --replace-pwm accepted"; fi
+ok
 
 # postrm keeps the overlay while config.txt enables it (also via a /boot alias) and removes it otherwise.
 postrm="$work/ctl/postrm"

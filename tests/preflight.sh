@@ -93,6 +93,9 @@ ln -s ../../devices/3f20c000.pwm "$owner"
 pass --build-only
 reject
 grep -q 'Standard PWM driver still owns' "$work/output"
+pass --pending-reboot
+grep -q 'expected to clear on reboot' "$work/output"
+reject --build-only --no-headers
 rm "$owner"
 rm "$dma/driver"
 reject
