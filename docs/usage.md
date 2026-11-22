@@ -47,8 +47,11 @@ The install and enable commands are in the README quickstart. In more detail:
 
 - Installing the package builds the module through DKMS but enables nothing.
 - `pwmstream-enable` is the only step that edits `config.txt` (a backup is kept). It refuses to
-  continue if audio, `dtoverlay=pwm`, `audremap` or I2S would conflict with PWM0/GPIO18. `--dry-run`
-  previews; `--disable` plus a reboot reverses it.
+  continue if audio, `dtoverlay=pwm`, `audremap` or I2S would conflict with PWM0/GPIO18, unless you
+  pass `--replace-pwm`, which comments those lines out with a marker. `--dry-run` previews;
+  `--disable` plus a reboot reverses it, and `--disable --restore` also uncomments the lines
+  `--replace-pwm` disabled. Only lines directly in `config.txt` are handled, not included files or
+  model sections.
 - Before enabling, stop anything else that touches the pin or PWM block: pigpio, rpi_ws281x, the old
   PWM overlay, and any `/dev/mem` or `/dev/gpiomem` user. Linux cannot stop raw register access.
 
@@ -125,7 +128,7 @@ unload).
 
 `apt remove` while the overlay is still enabled keeps the overlay and warns, so run
 `sudo pwmstream-enable --disable` and reboot first. Audio and PWM overlays are not restored
-automatically; decide ownership for the next use yourself.
+automatically; add `--restore` to that command to uncomment lines that `--replace-pwm` disabled.
 
 Manual installs: `sh uninstall.sh` previews, `sudo make uninstall` removes the module, CLI and
 overlay for the running kernel (it refuses while the module is loaded or the overlay is active).

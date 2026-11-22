@@ -49,7 +49,9 @@ sudo reboot
 
 `pwmstream-enable` checks for conflicts (analogue audio, `dtoverlay=pwm`, I2S and so on), installs
 the overlay, and adds `dtoverlay=pwmstream` to `/boot/firmware/config.txt` after making a backup.
-Add `--dry-run` first if you want to see what it will do.
+Add `--dry-run` first if you want to see what it will do. If it lists conflicting lines (for example
+`dtoverlay=pwm` for another PWM library), rerun with `--replace-pwm` to comment them out;
+`--disable --restore` later brings them back.
 
 **3. See a test signal.** Make a 4-byte pattern (16 ticks high, 16 low) and play it at 1 Mbit/s:
 
@@ -82,8 +84,9 @@ format, commands and rate behaviour.
   [Extending the supported kernel range](docs/development.md#extending-the-supported-kernel-range).
   You can also [open an issue](CONTRIBUTING.md#supporting-a-newer-kernel) with your `uname -r`.
 - **Upgrading the driver:** `sudo apt install ./pwmstream_<newer>_arm64.deb`, then reboot.
-- **Turning it off:** `sudo pwmstream-enable --disable`, reboot. This hands PWM0/GPIO18 back. Your
-  `config.txt` backups are kept next to it.
+- **Turning it off:** `sudo pwmstream-enable --disable`, reboot. This hands PWM0/GPIO18 back. Add
+  `--restore` to also uncomment the lines `--replace-pwm` disabled, which switches back to the
+  standard PWM driver. Backups are kept next to `config.txt` (`pwmstream-enable --list-backups`).
 - **Removing it:** `sudo apt remove pwmstream` removes the module and leaves `config.txt` alone;
   `sudo apt purge pwmstream` also removes the overlay file (disable first).
 
@@ -101,7 +104,7 @@ fixed: update, or run `pwmstream-report --force` to print the report anyway. If 
 | `dkms status` shows nothing for this kernel  | The running kernel is outside the supported range (`uname -r` must be `6.18.N+rpt-rpi-v8`, N >= 50) or its headers are missing: `sudo apt install linux-headers-rpi-v8`.                                                       |
 | `Permission denied`                          | Your user isn't in the `gpio` group (`groups` to check). Run `sudo usermod -aG gpio $USER` and log in again, or use `sudo`.                                                                                                    |
 | `Device or resource busy`                    | Another `pwmstream-cli run` (or your own program) already controls the output. Close it. `pwmstream-cli status` still works.                                                                                                   |
-| `pwmstream-enable` lists conflicting lines   | Those `config.txt` settings use PWM0 or GPIO18 (analogue audio, `dtoverlay=pwm`, `audremap`, I2S). Disable them, then rerun.                                                                                                   |
+| `pwmstream-enable` lists conflicting lines   | Those `config.txt` settings use PWM0 or GPIO18 (analogue audio, `dtoverlay=pwm`, `audremap`, I2S). Rerun with `--replace-pwm` to comment them out, or disable them yourself.                                                   |
 | Enabled, rebooted, but the driver won't bind | Something else owns the pin or PWM block (pigpio, rpi_ws281x, another overlay). Stop it, and check the kernel log.                                                                                                             |
 | Command runs but there's no signal           | Measure pin 12 against a ground pin, with a high-impedance probe. Check `pwmstream-cli status` for errors. Remember the pin is only driven while a `run` is active; otherwise it floats with a pull-down.                      |
 
