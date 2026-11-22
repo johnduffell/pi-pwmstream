@@ -10,7 +10,7 @@ remove | upgrade | deconfigure)
 	if [ "$1" = remove ]; then
 		for config in /boot/firmware/config.txt /boot/config.txt; do
 			if [ -r "$config" ] && grep -Eq '^[[:space:]]*dtoverlay=pwmstream([[:space:],]|$)' "$config"; then
-				echo "pwmstream: $config still has dtoverlay=pwmstream; run 'sudo pwmstream-enable --disable' and reboot (PWM0 stays unbound until then; no hardware is driven)." >&2
+				echo "pwmstream: $config still has dtoverlay=pwmstream; run 'sudo pwmstream-enable --disable' and reboot (the PWM block stays unbound until then; no hardware is driven)." >&2
 			fi
 		done
 	fi

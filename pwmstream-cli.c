@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /*
  * pwmstream-cli: command-line client for /dev/pwmstream0. `status` is a read-only observer; `run
- * SAMPLE [BIT_RATE_HZ]` uploads a pattern file, starts output and holds the controlling
- * descriptor until stopped, with interactive stop/start/rate/quit commands. Installed as
+ * PATTERN [BIT_RATE_HZ]` uploads a pattern file, starts output and holds the controlling
+ * descriptor until stopped, with interactive stop/start/bitrate/quit commands. Installed as
  * /usr/bin/pwmstream-cli. See docs/usage.md.
  */
 #define _POSIX_C_SOURCE 200809L
@@ -20,11 +20,19 @@
 #include <unistd.h>
 #include "pwmstream.h"
 
-_Static_assert(sizeof(struct pwmstream_config) == 16, "config ABI");
-_Static_assert(sizeof(struct pwmstream_rate) == 16, "rate ABI");
-_Static_assert(sizeof(struct pwmstream_status) == 64, "status ABI");
+_Static_assert(sizeof(struct pwmstream_config) == 32, "config ABI");
+_Static_assert(sizeof(struct pwmstream_start) == 16, "start ABI");
+_Static_assert(sizeof(struct pwmstream_bit_rate) == 16, "bit rate ABI");
+_Static_assert(sizeof(struct pwmstream_status) == 96, "status ABI");
 
 static volatile sig_atomic_t exiting;
+
+static int start_output(int fd)
+{
+	struct pwmstream_start start = {PWMSTREAM_ABI_VERSION, 0, {0, 0}};
+
+	return ioctl(fd, PWMSTREAM_START, &start);
+}
 
 struct command_input {
 	char line[128];
@@ -81,10 +89,10 @@ static void usage(const char *program)
 {
 	fprintf(stderr,
 		"Usage: %s [-d /dev/pwmstream0] status\n"
-		"       %s [-d /dev/pwmstream0] run SAMPLE [BIT_RATE_HZ]\n"
+		"       %s [-d /dev/pwmstream0] run PATTERN [BIT_RATE_HZ]\n"
 		"       %s --selftest\n"
 		"run holds the controlling fd until SIGINT/SIGTERM or 'quit'.\n"
-		"Commands: status, stop, start, rate HZ (stopped only), quit.\n",
+		"Commands: status, stop, start, bitrate HZ (stopped only), quit.\n",
 		program, program, program);
 }
 
@@ -97,8 +105,8 @@ static int parse_rate(const char *text, uint32_t *rate)
 		return -1;
 	errno = 0;
 	value = strtoul(text, &end, 10);
-	if (errno || *end || value < PWMSTREAM_MIN_HZ ||
-	    value > PWMSTREAM_MAX_HZ)
+	if (errno || *end || value < PWMSTREAM_MIN_BIT_RATE_HZ ||
+	    value > PWMSTREAM_MAX_BIT_RATE_HZ)
 		return -1;
 	*rate = (uint32_t)value;
 	return 0;
@@ -121,8 +129,8 @@ static int show_status(int fd, int print)
 		       " dma_status=%" PRIu32 " residue=%" PRIu32
 		       " config_ready=%s flags=0x%" PRIx32 "\n",
 		       status.flags & PWMSTREAM_F_RUNNING ? "running" : "stopped",
-		       status.uploaded_bytes, status.sample_bytes,
-		       status.requested_hz, status.actual_hz,
+		       status.uploaded_bytes, status.pattern_bytes,
+		       status.requested_bit_rate_hz, status.actual_bit_rate_hz,
 		       status.last_error, status.pwm_errors,
 		       status.dma_status, status.dma_residue,
 		       status.flags & PWMSTREAM_F_CONFIG_READY ? "yes" : "no",
@@ -136,7 +144,7 @@ static int show_status(int fd, int print)
 
 static int upload(int fd, const char *path, uint32_t rate)
 {
-	struct pwmstream_config cfg = {PWMSTREAM_ABI_VERSION, 0, rate, 0};
+	struct pwmstream_config cfg = {PWMSTREAM_ABI_VERSION, 1, 0, rate, {0}};
 	struct stat st;
 	unsigned char buffer[16384];
 	size_t remaining;
@@ -148,14 +156,14 @@ static int upload(int fd, const char *path, uint32_t rate)
 	if (fstat(source, &st) < 0)
 		goto out;
 	if (!S_ISREG(st.st_mode) || st.st_size <= 0 ||
-	    st.st_size > PWMSTREAM_MAX_BYTES || st.st_size % 4) {
+	    st.st_size > PWMSTREAM_MAX_PATTERN_BYTES || st.st_size % 4) {
 		errno = EINVAL;
 		goto out;
 	}
-	cfg.sample_bytes = (uint32_t)st.st_size;
+	cfg.pattern_bytes = (uint32_t)st.st_size;
 	if (ioctl(fd, PWMSTREAM_CONFIG, &cfg) < 0)
 		goto out;
-	remaining = cfg.sample_bytes;
+	remaining = cfg.pattern_bytes;
 	while (remaining && !exiting) {
 		size_t offset = 0;
 		size_t want = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
@@ -222,17 +230,17 @@ static void command(int fd, char *line)
 	else if (!strcmp(line, "stop"))
 		ret = ioctl(fd, PWMSTREAM_STOP);
 	else if (!strcmp(line, "start"))
-		ret = ioctl(fd, PWMSTREAM_START);
-	else if (!strncmp(line, "rate ", 5)) {
-		struct pwmstream_rate rate = {PWMSTREAM_ABI_VERSION, 0, {0, 0}};
+		ret = start_output(fd);
+	else if (!strncmp(line, "bitrate ", 8)) {
+		struct pwmstream_bit_rate rate = {PWMSTREAM_ABI_VERSION, 0, {0, 0}};
 
-		if (parse_rate(line + 5, &rate.rate_hz) < 0) {
-			fprintf(stderr, "Invalid rate\n");
+		if (parse_rate(line + 8, &rate.bit_rate_hz) < 0) {
+			fprintf(stderr, "Invalid bit rate\n");
 			return;
 		}
-		ret = ioctl(fd, PWMSTREAM_RATE, &rate);
+		ret = ioctl(fd, PWMSTREAM_BIT_RATE, &rate);
 	} else if (*line) {
-		fprintf(stderr, "Commands: status, stop, start, rate HZ, quit\n");
+		fprintf(stderr, "Commands: status, stop, start, bitrate HZ, quit\n");
 	}
 	if (ret < 0)
 		perror("command");
@@ -250,14 +258,14 @@ static int run(int fd, const char *path, uint32_t rate)
 		errno = EINTR;
 		return -1;
 	}
-	if (ioctl(fd, PWMSTREAM_START) < 0)
+	if (start_output(fd) < 0)
 		return -1;
 	if (show_status(fd, 1) < 0)
 		return -1;
 	if (monotonic_ms(&now) < 0)
 		return -1;
 	deadline = now + 1000;
-	fprintf(stderr, "Holding controller; Ctrl-C stops. Type status/stop/start/rate HZ/quit.\n");
+	fprintf(stderr, "Holding controller; Ctrl-C stops. Type status/stop/start/bitrate HZ/quit.\n");
 	while (!exiting) {
 		struct pollfd pfd = {STDIN_FILENO, POLLIN, 0};
 		int ready;
@@ -308,10 +316,10 @@ static int selftest(void)
 	struct command_input input = {0};
 	size_t i;
 
-	if (parse_rate("50000000", &rate) || rate != PWMSTREAM_DEFAULT_HZ ||
+	if (parse_rate("50000000", &rate) || rate != PWMSTREAM_DEFAULT_BIT_RATE_HZ ||
 	    !parse_rate("0", &rate) || !parse_rate("-1", &rate) ||
 	    parse_rate("62500000", &rate) || rate != 62500000U ||
-	    parse_rate("100000000", &rate) || rate != PWMSTREAM_MAX_HZ ||
+	    parse_rate("100000000", &rate) || rate != PWMSTREAM_MAX_BIT_RATE_HZ ||
 	    !parse_rate("100000001", &rate) || !parse_rate("100000junk", &rate) ||
 	    !parse_rate("99999999999999999999999999999", &rate) ||
 	    parse_rate("100000", &rate))
@@ -353,7 +361,7 @@ static int selftest(void)
 	if (input_byte(&input, '\n') != 1 || input.line[0] ||
 	    monotonic_ms(&now) < 0)
 		return EXIT_FAILURE;
-	puts("ABI sizes, rate parser, command framing and polling deadlines: OK (no device access)");
+	puts("ABI sizes, bit rate parser, command framing and polling deadlines: OK (no device access)");
 	return EXIT_SUCCESS;
 }
 
@@ -372,7 +380,7 @@ int main(int argc, char **argv)
 {
 	const char *device = "/dev/pwmstream0";
 	struct sigaction action;
-	uint32_t rate = PWMSTREAM_DEFAULT_HZ;
+	uint32_t rate = PWMSTREAM_DEFAULT_BIT_RATE_HZ;
 	int index = 1, fd, ret, saved;
 
 	if (argc == 2 && !strcmp(argv[1], "--selftest"))

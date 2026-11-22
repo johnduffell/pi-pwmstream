@@ -54,7 +54,7 @@ if [ "$list" -eq 1 ]; then
 	exit 0
 fi
 
-# Lines that use PWM0/GPIO18. --replace-pwm appends $marker so --restore can find them again.
+# Lines that use the PWM block or GPIO18. --replace-pwm appends $marker so --restore can find them again.
 conflict_re='^([[:space:]]*)(dtparam=audio=(on|1)\b|dtoverlay=(pwm|pwm-2chan|audremap|i2s-[a-z-]+)(,|[[:space:]]|$))(.*)$'
 marker=' # pwmstream-enable: replaced'
 tmp=
@@ -97,7 +97,7 @@ if [ "$disable" -eq 1 ]; then
 	elif [ "$pending" -gt 0 ]; then
 		echo "$pending line(s) commented out by --replace-pwm stay disabled; add --restore to bring them back."
 	fi
-	echo "Disabled. Reboot to release PWM0/GPIO18; included files and model sections are not edited."
+	echo "Disabled. Reboot to release the PWM block and GPIO18; included files and model sections are not edited."
 	exit 0
 fi
 
@@ -109,7 +109,7 @@ bad=$(grep -En "$conflict_re" "$config" || true)
 preflight_args=--no-headers
 if [ -n "$bad" ]; then
 	if [ "$replace" -eq 0 ]; then
-		echo "These lines in $config conflict with PWM0/GPIO18; disable them first, or rerun with" >&2
+		echo "These lines in $config conflict with the PWM block or GPIO18; disable them first, or rerun with" >&2
 		echo "--replace-pwm to comment them out (undo later with: pwmstream-enable --disable --restore):" >&2
 		echo "$bad" >&2
 		exit 1
@@ -122,7 +122,7 @@ fi
 do_or_say install -m 0644 "$sharedir/pwmstream.dtbo" "$overlays/pwmstream.dtbo"
 if [ -n "$bad" ]; then
 	backup
-	echo "Commenting out lines that conflict with PWM0/GPIO18:"
+	echo "Commenting out lines that conflict with the PWM block or GPIO18:"
 	echo "$bad"
 	edit_config "s/${conflict_re}/#\\1\\2\\6${marker}/"
 fi

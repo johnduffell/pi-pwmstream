@@ -52,7 +52,7 @@ Section: kernel
 Priority: optional
 Homepage: https://github.com/johnduffell/pi-pwmstream
 Description: PWM/DMA bitstream output driver for Raspberry Pi 3 (DKMS)
- Streams a user-supplied bit pattern out of GPIO18 (PWM0) using DMA at up to
+ Streams a user-supplied bit pattern out of GPIO18 (PWM channel 1) using DMA at up to
  50 Mbit/s. Supports Raspberry Pi OS kernels 6.18.N+rpt-rpi-v8 (N >= 50) on
  the Pi 3B+ only. The module is built by DKMS for each installed kernel.
  Nothing is enabled by installing this package: run pwmstream-enable

@@ -31,16 +31,16 @@ make help        # list targets, production vs development
 make check-all   # every check below; this is what CI runs
 ```
 
-| Target            | Checks                                                                                                |
-| ----------------- | ----------------------------------------------------------------------------------------------------- |
-| `check`           | Builds the CLI and native test client with strict warnings; ABI layout, rate parser and CLI selftests |
-| `check-install`   | Install/uninstall scripts against mock files: gates reject before any write                           |
-| `check-harness`   | Deploy/test scripts against mocked `ssh`/`scp`: gating, failure propagation, cleanup                  |
-| `check-preflight` | Preflight gate against synthetic paths, including the real `bcm2835-pwm` binding                      |
-| `check-overlay`   | Overlay replaces exactly one PWM node and keeps its `reg` (fixture, not a bootable board)             |
-| `check-kbuild`    | Builds the module with `W=1` against the pinned headers and checks vermagic                           |
-| `check-static`    | sparse, shellcheck, `gcc -fanalyzer`, cppcheck (needs those tools)                                    |
-| `check-package`   | Builds the `.deb`; lintian, a scratch DKMS build, the kernel-range matrix, `pwmstream-enable` logic   |
+| Target            | Checks                                                                                                    |
+| ----------------- | --------------------------------------------------------------------------------------------------------- |
+| `check`           | Builds the CLI and native test client with strict warnings; ABI layout, bit rate parser and CLI selftests |
+| `check-install`   | Install/uninstall scripts against mock files: gates reject before any write                               |
+| `check-harness`   | Deploy/test scripts against mocked `ssh`/`scp`: gating, failure propagation, cleanup                      |
+| `check-preflight` | Preflight gate against synthetic paths, including the real `bcm2835-pwm` binding                          |
+| `check-overlay`   | Overlay replaces exactly one PWM node and keeps its `reg` (fixture, not a bootable board)                 |
+| `check-kbuild`    | Builds the module with `W=1` against the pinned headers and checks vermagic                               |
+| `check-static`    | sparse, shellcheck, `gcc -fanalyzer`, cppcheck (needs those tools)                                        |
+| `check-package`   | Builds the `.deb`; lintian, a scratch DKMS build, the kernel-range matrix, `pwmstream-enable` logic       |
 
 `dev-tools/fetch-kernel-headers.sh --install` downloads the headers pinned in
 `dev-tools/kernels.txt`, verifies their SHA-256 and installs them. Update the pins together with a
@@ -110,7 +110,7 @@ electrical qualification are **not** covered.
 
 The default is 50 Mbit/s; the rate limits and what could limit the pin are in
 [design.md](design.md#rates-and-limits). To try a candidate rate (62.5, ~83.3, 100 Mbit/s), step up
-with `status`, `stop`, `rate N`, `start`, watch for errors for at least a minute, and stop and
+with `status`, `stop`, `bitrate N`, `start`, watch for errors for at least a minute, and stop and
 collect logs if quality deteriorates. Scope bandwidth and probe loading limit the measured amplitude
 and shape.
 

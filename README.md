@@ -22,8 +22,9 @@ You need:
 - a **Raspberry Pi 3 B+** (the plain 3 B and other boards are not supported),
 - **Raspberry Pi OS (Debian 13, 64-bit)** with a `6.18.N+rpt-rpi-v8` kernel where N is 50 or higher.
   Check with `uname -r`,
-- **GPIO18 and the PWM hardware to yourself.** The driver takes over PWM0 and the Pi's PWM audio
-  output stops working. Don't use it together with pigpio, rpi_ws281x, I2S audio or `dtoverlay=pwm`.
+- **GPIO18 and the PWM hardware to yourself.** The driver takes over the PWM block and the Pi's PWM
+  audio output stops working. Don't use it together with pigpio, rpi_ws281x, I2S audio or
+  `dtoverlay=pwm`.
 
 If that fits, read on. If you want a ready-made waveform generator with a UI, that is a separate
 project planned, built on top of this driver.
@@ -70,7 +71,7 @@ pattern repeats every 32 microseconds. Press Ctrl-C to stop. In a second termina
 **Pattern files** are raw bytes, sent most-significant bit first and repeating forever: 4 bytes to 1
 MiB, a multiple of 4. `AA AA AA AA` gives alternating bits, so at the default 50 Mbit/s it makes a
 25 MHz square wave. While `pwmstream-cli run` is active you can type commands such as `status` and
-`rate 25000000` to change it live. The [user guide](docs/usage.md#using-the-cli) has the full
+`bitrate 25000000` to change it live. The [user guide](docs/usage.md#using-the-cli) has the full
 format, commands and rate behaviour.
 
 ## Keeping it working
@@ -84,9 +85,10 @@ format, commands and rate behaviour.
   [Extending the supported kernel range](docs/development.md#extending-the-supported-kernel-range).
   You can also [open an issue](CONTRIBUTING.md#supporting-a-newer-kernel) with your `uname -r`.
 - **Upgrading the driver:** `sudo apt install ./pwmstream_<newer>_arm64.deb`, then reboot.
-- **Turning it off:** `sudo pwmstream-enable --disable`, reboot. This hands PWM0/GPIO18 back. Add
-  `--restore` to also uncomment the lines `--replace-pwm` disabled, which switches back to the
-  standard PWM driver. Backups are kept next to `config.txt` (`pwmstream-enable --list-backups`).
+- **Turning it off:** `sudo pwmstream-enable --disable`, reboot. This hands the PWM block and GPIO18
+  back. Add `--restore` to also uncomment the lines `--replace-pwm` disabled, which switches back to
+  the standard PWM driver. Backups are kept next to `config.txt`
+  (`pwmstream-enable --list-backups`).
 - **Removing it:** `sudo apt remove pwmstream` removes the module and leaves `config.txt` alone;
   `sudo apt purge pwmstream` also removes the overlay file (disable first).
 
@@ -104,7 +106,7 @@ fixed: update, or run `pwmstream-report --force` to print the report anyway. If 
 | `dkms status` shows nothing for this kernel  | The running kernel is outside the supported range (`uname -r` must be `6.18.N+rpt-rpi-v8`, N >= 50) or its headers are missing: `sudo apt install linux-headers-rpi-v8`.                                                       |
 | `Permission denied`                          | Your user isn't in the `gpio` group (`groups` to check). Run `sudo usermod -aG gpio $USER` and log in again, or use `sudo`.                                                                                                    |
 | `Device or resource busy`                    | Another `pwmstream-cli run` (or your own program) already controls the output. Close it. `pwmstream-cli status` still works.                                                                                                   |
-| `pwmstream-enable` lists conflicting lines   | Those `config.txt` settings use PWM0 or GPIO18 (analogue audio, `dtoverlay=pwm`, `audremap`, I2S). Rerun with `--replace-pwm` to comment them out, or disable them yourself.                                                   |
+| `pwmstream-enable` lists conflicting lines   | Those `config.txt` settings use the PWM block or GPIO18 (analogue audio, `dtoverlay=pwm`, `audremap`, I2S). Rerun with `--replace-pwm` to comment them out, or disable them yourself.                                          |
 | Enabled, rebooted, but the driver won't bind | Something else owns the pin or PWM block (pigpio, rpi_ws281x, another overlay). Stop it, and check the kernel log.                                                                                                             |
 | Command runs but there's no signal           | Measure pin 12 against a ground pin, with a high-impedance probe. Check `pwmstream-cli status` for errors. Remember the pin is only driven while a `run` is active; otherwise it floats with a pull-down.                      |
 

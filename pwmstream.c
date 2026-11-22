@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-only
 /*
  * pwmstream: streams a user-supplied bit pattern out of GPIO18 on a Raspberry Pi 3B+, serialised
- * by the BCM2837 PWM0 block and fed by a cyclic DMA transfer, so the CPU is not involved while it
- * runs. It replaces the standard PWM driver for that block via the pwmstream overlay, and only
+ * by the BCM2837 PWM block (channel 1) and fed by a cyclic DMA transfer, so the CPU is not
+ * involved while it runs. It replaces the standard PWM driver for that block via the pwmstream
+ * overlay, and only
  * loads on the reviewed kernel range (6.18.50+ downstream kernels). Dual-licensed for kernel
  * integration. Design: docs/design.md; interface: docs/abi.md and pwmstream.h.
  */
@@ -125,7 +126,7 @@ static int ps_stop(struct ps_device *ps)
 	if (pinret)
 		dev_err(ps->dma_dev, "PWM idle pin selection failed: %d\n", pinret);
 	if (ret) {
-		dev_err(ps->dma_dev, "PWM DMA termination failed: %d; retaining sample and channel\n",
+		dev_err(ps->dma_dev, "PWM DMA termination failed: %d; retaining pattern and channel\n",
 			ret);
 		ps->last_error = ret;
 		return ret;
@@ -199,15 +200,16 @@ static void ps_monitor(struct work_struct *work)
 static bool ps_rate_in_range(unsigned long hz)
 {
 	/* CCF reports 100000001 Hz for the nominal 100 MHz target on this Pi. */
-	return hz >= PWMSTREAM_MIN_HZ &&
-	       hz <= (unsigned long)PWMSTREAM_MAX_HZ + PS_RATE_TOLERANCE_HZ;
+	return hz >= PWMSTREAM_MIN_BIT_RATE_HZ &&
+	       hz <= (unsigned long)PWMSTREAM_MAX_BIT_RATE_HZ +
+		     PS_RATE_TOLERANCE_HZ;
 }
 
 static int ps_validate_rate(struct ps_device *ps, u32 hz)
 {
 	long rounded;
 
-	if (hz < PWMSTREAM_MIN_HZ || hz > PWMSTREAM_MAX_HZ)
+	if (hz < PWMSTREAM_MIN_BIT_RATE_HZ || hz > PWMSTREAM_MAX_BIT_RATE_HZ)
 		return -ERANGE;
 	rounded = clk_round_rate(ps->clk, hz);
 	if (rounded < 0)
@@ -255,42 +257,47 @@ static int ps_configure(struct ps_device *ps, struct pwmstream_config *cfg)
 	void *staging;
 	__le32 *buffer;
 	dma_addr_t addr;
+	u32 hz;
 	int ret;
 
-	if (cfg->version != PWMSTREAM_ABI_VERSION || cfg->reserved ||
-	    !cfg->sample_bytes || cfg->sample_bytes % 4 ||
-	    cfg->sample_bytes > PWMSTREAM_MAX_BYTES)
+	if (cfg->version != PWMSTREAM_ABI_VERSION || cfg->channels != 1 ||
+	    cfg->reserved[0] || cfg->reserved[1] || cfg->reserved[2] ||
+	    cfg->reserved[3] ||
+	    !cfg->pattern_bytes || cfg->pattern_bytes % 4 ||
+	    cfg->pattern_bytes > PWMSTREAM_MAX_PATTERN_BYTES)
 		return -EINVAL;
-	ret = ps_validate_rate(ps, cfg->rate_hz ?: PWMSTREAM_DEFAULT_HZ);
+	/* 0 keeps the current rate (the default until one is set). */
+	hz = cfg->bit_rate_hz ?: ps->requested ?: PWMSTREAM_DEFAULT_BIT_RATE_HZ;
+	ret = ps_validate_rate(ps, hz);
 	if (ret)
 		return ret;
-	staging = kvmalloc(cfg->sample_bytes, GFP_KERNEL);
+	staging = kvmalloc(cfg->pattern_bytes, GFP_KERNEL);
 	if (!staging)
 		return -ENOMEM;
-	buffer = dma_alloc_coherent(ps->dma_dev, cfg->sample_bytes, &addr,
+	buffer = dma_alloc_coherent(ps->dma_dev, cfg->pattern_bytes, &addr,
 				    GFP_KERNEL);
 	if (!buffer) {
 		kvfree(staging);
 		return -ENOMEM;
 	}
-	if (addr > U32_MAX || cfg->sample_bytes - 1 > U32_MAX - addr) {
+	if (addr > U32_MAX || cfg->pattern_bytes - 1 > U32_MAX - addr) {
 		ret = -EOVERFLOW;
 		goto free_new;
 	}
-	ret = ps_set_rate(ps, cfg->rate_hz ?: PWMSTREAM_DEFAULT_HZ);
+	ret = ps_set_rate(ps, hz);
 	if (ret)
 		goto free_new;
 	ps_free_buffer(ps);
 	ps->staging = staging;
 	ps->buffer = buffer;
 	ps->buffer_dma = addr;
-	ps->length = cfg->sample_bytes;
+	ps->length = cfg->pattern_bytes;
 	ps->pwm_errors = 0;
 	ps->dma_status = DMA_COMPLETE;
 	ps->residue = 0;
 	return 0;
 free_new:
-	dma_free_coherent(ps->dma_dev, cfg->sample_bytes, buffer, addr);
+	dma_free_coherent(ps->dma_dev, cfg->pattern_bytes, buffer, addr);
 	kvfree(staging);
 	return ret;
 }
@@ -331,10 +338,10 @@ static int ps_start(struct ps_device *ps)
 	if (ret)
 		goto fail;
 	/*
-	 * DMA itself primes the FIFO starting at sample word zero. No CPU
+	 * DMA itself primes the FIFO starting at pattern word zero. No CPU
 	 * prefill (which would require rotating the DMA ring). Wait for data,
 	 * not FULL: DREQ pacing need not fill the FIFO completely. The channel
-	 * remains disabled so the sample prefix is not consumed while priming.
+	 * remains disabled so the pattern prefix is not consumed while priming.
 	 */
 	writel(PS_DMA_ON |
 	       FIELD_PREP(PS_DMA_DREQ_MASK, PS_DMA_DREQ_THRESHOLD) |
@@ -351,7 +358,7 @@ static int ps_start(struct ps_device *ps)
 
 		dma_status = dmaengine_tx_status(ps->chan, ps->cookie, &tx);
 		dev_err(ps->misc.parent,
-			"FIFO priming failed: ret=%d ctl=%#x sta=%#x dmac=%#x rng1=%u dma_status=%d residue=%u sample_bytes=%u actual_hz=%u\n",
+			"FIFO priming failed: ret=%d ctl=%#x sta=%#x dmac=%#x rng1=%u dma_status=%d residue=%u pattern_bytes=%u actual_bit_rate_hz=%u\n",
 			ret ?: -EIO, readl(ps->regs + PS_CTL),
 			readl(ps->regs + PS_STA), readl(ps->regs + PS_DMAC),
 			readl(ps->regs + PS_RNG1), dma_status, tx.residue,
@@ -452,7 +459,8 @@ static long ps_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	struct ps_device *ps = file->private_data;
 	void __user *ptr = (void __user *)arg;
 	struct pwmstream_config cfg;
-	struct pwmstream_rate rate;
+	struct pwmstream_bit_rate rate;
+	struct pwmstream_start start;
 	struct pwmstream_status status = {};
 	long ret = 0;
 
@@ -467,20 +475,21 @@ static long ps_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		status.flags = PWMSTREAM_F_DMA_LIMITED |
 			(ps->running ? PWMSTREAM_F_RUNNING : 0) |
 			(ps->length && ps->uploaded == ps->length ?
-			 PWMSTREAM_F_COMPLETE : 0) |
+			 PWMSTREAM_F_UPLOAD_COMPLETE : 0) |
 			(ps->controller ? PWMSTREAM_F_CONTROLLER : 0) |
 			(ps->clock_on ? PWMSTREAM_F_CLOCK_READY : 0) |
 			(ps->buffer && ps->clock_on && !ps->last_error &&
 			 (ps->running || ps->dma_quiesced) ?
 			 PWMSTREAM_F_CONFIG_READY : 0);
-		status.sample_bytes = ps->length;
+		status.pattern_bytes = ps->length;
 		status.uploaded_bytes = ps->uploaded;
-		status.requested_hz = ps->requested;
-		status.actual_hz = ps->actual;
+		status.requested_bit_rate_hz = ps->requested;
+		status.actual_bit_rate_hz = ps->actual;
 		status.last_error = ps->last_error;
 		status.pwm_errors = ps->pwm_errors;
 		status.dma_status = ps->dma_status;
 		status.dma_residue = ps->residue;
+		status.channels = 1;
 		if (copy_to_user(ptr, &status, sizeof(status)))
 			ret = -EFAULT;
 		goto out;
@@ -504,17 +513,23 @@ static long ps_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		else
 			ret = ps_configure(ps, &cfg);
 		break;
-	case PWMSTREAM_RATE:
+	case PWMSTREAM_BIT_RATE:
 		if (copy_from_user(&rate, ptr, sizeof(rate)))
 			ret = -EFAULT;
 		else if (rate.version != PWMSTREAM_ABI_VERSION ||
 			 rate.reserved[0] || rate.reserved[1])
 			ret = -EINVAL;
 		else
-			ret = ps_set_rate(ps, rate.rate_hz);
+			ret = ps_set_rate(ps, rate.bit_rate_hz);
 		break;
 	case PWMSTREAM_START:
-		ret = ps_start(ps);
+		if (copy_from_user(&start, ptr, sizeof(start)))
+			ret = -EFAULT;
+		else if (start.version != PWMSTREAM_ABI_VERSION ||
+			 start.flags || start.reserved[0] || start.reserved[1])
+			ret = -EINVAL;
+		else
+			ret = ps_start(ps);
 		break;
 	default:
 		ret = -ENOTTY;
@@ -675,7 +690,7 @@ static int ps_probe(struct platform_device *pdev)
 	ret = clk_rate_exclusive_get(ps->clk);
 	if (ret)
 		goto free_ps;
-	ret = ps_set_rate(ps, PWMSTREAM_DEFAULT_HZ);
+	ret = ps_set_rate(ps, PWMSTREAM_DEFAULT_BIT_RATE_HZ);
 	if (ret)
 		goto release_clock;
 	ps->chan = dma_request_chan(dev, "tx");
@@ -711,7 +726,7 @@ static int ps_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, ps);
 	ret = misc_register(&ps->misc);
 	if (!ret) {
-		dev_info(dev, "experimental PWM0 GPIO18 serializer, %u Hz\n",
+		dev_info(dev, "experimental PWM channel 1 GPIO18 serializer, %u bit/s\n",
 			 ps->actual);
 		return 0;
 	}
@@ -796,4 +811,4 @@ static struct platform_driver ps_driver = {
 };
 module_platform_driver(ps_driver);
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("Experimental BCM2837 PWM0 cyclic serializer");
+MODULE_DESCRIPTION("Experimental BCM2837 PWM channel 1 cyclic serializer");
